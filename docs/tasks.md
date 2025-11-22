@@ -20,8 +20,8 @@
 
 ## indicator_engine
 
-- [ ] [T10] ローリング更新: VWAP/BB/RSI/ADX/EMA/ATR を実装し、ウォームアップ長・NaN ガードを入れる。参照: `docs/design/indicator_engine.md`, `docs/basic_design.md`（指標一覧）。 （依存: T02）
-- [ ] [T11] I/F 確定: `update(timeframe, bar)` / `get_latest(timeframe)` / `warmup` を実装し、簡易ユニットテスト 1 本を追加。（依存: T10）
+- [x] [T10] ローリング更新: VWAP/BB/RSI/ADX/EMA/ATR を実装し、ウォームアップ長・NaN ガードを入れる。参照: `docs/design/indicator_engine.md`, `docs/basic_design.md`（指標一覧）。 （依存: T02）
+- [x] [T11] I/F 確定: `update(timeframe, bar)` / `get_latest(timeframe)` / `warmup` を実装し、簡易ユニットテスト 1 本を追加。（依存: T10）
 
 ## strategy_core
 
