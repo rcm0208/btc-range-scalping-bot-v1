@@ -1,0 +1,22 @@
+symbol: "BTCUSDT"
+candle_intervals:
+  trend: "15m"
+  signal: "1m"
+vwap_deviation_pct_long: 0.006
+vwap_deviation_pct_short: 0.006
+rsi_long_max: 25
+rsi_short_min: 75
+tp_pct: 0.003
+sl_pct: -0.0022
+timeout_minutes: 12
+atr_spike_multiplier: 2.5
+atr_low_vol_threshold: null
+regime:
+  adx_max: 20
+  bb_width_pct_max: 0.005
+  ema_flatness_threshold: 0.0001
+  ema_spread_pct_max: 0.0015
+  vwap_reversion_check: true
+schedule:
+  enabled: false
+  windows: []

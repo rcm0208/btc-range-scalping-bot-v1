@@ -15,8 +15,8 @@
 
 ## config・型共通
 
-- [ ] [T01] config 雛形: `config/strategy.yaml` `risk.yaml` `env.yaml` `.env.example` を初期値で埋める。.env.example に必要キー（HL_AGENT_PRIVATE_KEY 等）を列挙し README に参照リンクを追記。参照: `docs/design/config_schema.md`, `docs/basic_design.md`。（依存なし）
-- [ ] [T02] 型共有: `src/utils/types.py` に Bar 型・Indicators 型・Signal/CheckResult 等の共通型を定義し、core/infra から参照できるようにする。参照: `docs/design/strategy_core.md`, `docs/design/indicator_engine.md`。（依存: T01）
+- [x] [T01] config 雛形: `config/strategy.yaml` `risk.yaml` `env.yaml` `.env.example` を初期値で埋める。.env.example に必要キー（HL_AGENT_PRIVATE_KEY 等）を列挙し README に参照リンクを追記。参照: `docs/design/config_schema.md`, `docs/basic_design.md`。（依存なし）
+- [x] [T02] 型共有: `src/utils/types.py` に Bar 型・Indicators 型・Signal/CheckResult 等の共通型を定義し、core/infra から参照できるようにする。参照: `docs/design/strategy_core.md`, `docs/design/indicator_engine.md`。（依存: T01）
 
 ## indicator_engine
 

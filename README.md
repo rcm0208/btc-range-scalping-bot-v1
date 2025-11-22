@@ -9,6 +9,10 @@ BTC Range Scalping Bot v1
 - 依存インストール（未定義の場合は後続で requirements.txt / pyproject.toml を整備）:
   - `pip install -r requirements.txt`
 
+## コンフィグ
+- 環境・戦略パラメータは `config/strategy.yaml` `config/risk.yaml` `config/env.yaml` を編集。
+- 機密値は `config/env.example` を参考に `.env` を作成して管理する（Hyperliquid の agent 鍵や Slack Webhook など）。
+
 ## ドキュメントの読み順
 1. `docs/requirements.md`（要件のソース）
 2. `docs/basic_design.md`（基本設計・ディレクトリ構成）
