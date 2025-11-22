@@ -40,3 +40,17 @@ def test_rsi_hits_100_when_only_gains() -> None:
 
     assert latest is not None
     assert latest["rsi"] == pytest.approx(100.0)
+
+
+def test_rsi_emits_on_warmup_completion() -> None:
+    period = 7
+    engine = IndicatorEngine(rsi_period=period)
+    price = 100.0
+    latest = None
+    for i in range(period + 1):  # first bar seeds prev_close, then period deltas
+        price += 1.0
+        latest = engine.update("1m", make_bar(price, i))
+
+    assert latest is not None
+    # After period deltas the initial RSI should be emitted (all gains -> 100)
+    assert latest["rsi"] == pytest.approx(100.0)

@@ -209,6 +209,12 @@ class IndicatorEngine:
                 if rsi_state.init_count == self.rsi_period:
                     rsi_state.avg_gain = rsi_state.init_gain_sum / self.rsi_period
                     rsi_state.avg_loss = rsi_state.init_loss_sum / self.rsi_period
+                    if rsi_state.avg_loss == 0:
+                        if rsi_state.avg_gain == 0:
+                            return 50.0
+                        return 100.0
+                    rs_seed = rsi_state.avg_gain / rsi_state.avg_loss
+                    return 100 - (100 / (1 + rs_seed))
             return None
 
         rsi_state.avg_gain = (
@@ -261,14 +267,25 @@ class IndicatorEngine:
             adx_state.tr_window.append(tr)
             adx_state.dm_pos_window.append(dm_pos)
             adx_state.dm_neg_window.append(dm_neg)
-            if len(adx_state.tr_window) < self.adx_period:
-                return None
             adx_state.smoothed_tr = sum(adx_state.tr_window)
             adx_state.smoothed_dm_pos = sum(adx_state.dm_pos_window)
             adx_state.smoothed_dm_neg = sum(adx_state.dm_neg_window)
             if adx_state.smoothed_tr == 0:
                 adx_state.adx = 0.0
                 return adx_state.adx
+
+            di_pos_seed = 100 * (adx_state.smoothed_dm_pos / adx_state.smoothed_tr)
+            di_neg_seed = 100 * (adx_state.smoothed_dm_neg / adx_state.smoothed_tr)
+            dx_seed = self._compute_dx(di_pos_seed, di_neg_seed)
+
+            if len(adx_state.dx_window) >= self.adx_period:
+                adx_state.dx_window.pop(0)
+            adx_state.dx_window.append(dx_seed)
+
+            if len(adx_state.dx_window) >= self.adx_period:
+                adx_state.adx = sum(adx_state.dx_window[-self.adx_period :]) / self.adx_period
+                return adx_state.adx
+
             # Skip smoothing on the seeding bar to avoid double-counting this TR/DM.
             return None
 
