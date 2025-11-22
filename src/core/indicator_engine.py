@@ -271,8 +271,11 @@ class IndicatorEngine:
             adx_state.smoothed_dm_pos = sum(adx_state.dm_pos_window)
             adx_state.smoothed_dm_neg = sum(adx_state.dm_neg_window)
             if adx_state.smoothed_tr == 0:
-                adx_state.adx = 0.0
-                return adx_state.adx
+                adx_state.dx_window.append(0.0)
+                if len(adx_state.dx_window) >= self.adx_period:
+                    adx_state.adx = sum(adx_state.dx_window[-self.adx_period :]) / self.adx_period
+                    return adx_state.adx
+                return None
 
             di_pos_seed = 100 * (adx_state.smoothed_dm_pos / adx_state.smoothed_tr)
             di_neg_seed = 100 * (adx_state.smoothed_dm_neg / adx_state.smoothed_tr)
@@ -302,6 +305,15 @@ class IndicatorEngine:
         adx_state.smoothed_dm_neg = adx_state.smoothed_dm_neg - (adx_state.smoothed_dm_neg / self.adx_period) + dm_neg
 
         if adx_state.smoothed_tr == 0:
+            if len(adx_state.dx_window) >= self.adx_period:
+                adx_state.dx_window.pop(0)
+            adx_state.dx_window.append(0.0)
+            if adx_state.adx is None:
+                if len(adx_state.dx_window) < self.adx_period:
+                    return None
+                adx_state.adx = sum(adx_state.dx_window) / self.adx_period
+            else:
+                adx_state.adx = ((adx_state.adx * (self.adx_period - 1)) + 0.0) / self.adx_period
             return adx_state.adx
 
         di_pos = 100 * (adx_state.smoothed_dm_pos / adx_state.smoothed_tr)
