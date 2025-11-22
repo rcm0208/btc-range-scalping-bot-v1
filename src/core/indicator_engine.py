@@ -269,6 +269,16 @@ class IndicatorEngine:
             if adx_state.smoothed_tr == 0:
                 adx_state.adx = 0.0
                 return adx_state.adx
+
+        # Collect initial DX values until dx_window is full (Wilder warmup).
+        if (
+            adx_state.smoothed_tr is not None
+            and adx_state.smoothed_dm_pos is not None
+            and adx_state.smoothed_dm_neg is not None
+            and adx_state.adx is None
+        ):
+            if adx_state.smoothed_tr == 0:
+                return 0.0
             di_pos = 100 * (adx_state.smoothed_dm_pos / adx_state.smoothed_tr)
             di_neg = 100 * (adx_state.smoothed_dm_neg / adx_state.smoothed_tr)
             dx = self._compute_dx(di_pos, di_neg)
@@ -297,8 +307,12 @@ class IndicatorEngine:
         di_neg = 100 * (adx_state.smoothed_dm_neg / adx_state.smoothed_tr)
         dx = self._compute_dx(di_pos, di_neg)
 
+        if len(adx_state.dx_window) >= self.adx_period:
+            adx_state.dx_window.pop(0)
+        adx_state.dx_window.append(dx)
+
         if adx_state.adx is None:
-            adx_state.adx = dx
+            adx_state.adx = sum(adx_state.dx_window) / len(adx_state.dx_window)
         else:
             adx_state.adx = ((adx_state.adx * (self.adx_period - 1)) + dx) / self.adx_period
         return adx_state.adx
