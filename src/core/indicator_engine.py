@@ -8,6 +8,13 @@ from typing import Deque, Dict, Iterable, List, Optional
 from src.utils import Bar, Indicators, Timeframe
 
 
+class UnsupportedTimeframeError(ValueError):
+    """Raised when an unsupported timeframe is provided."""
+
+    def __init__(self, timeframe: Timeframe):
+        super().__init__(f"Unsupported timeframe: {timeframe}")
+
+
 def _empty_indicators() -> Indicators:
     """Pylance/mypy 向けの初期値ヘルパー。"""
     return {
@@ -21,6 +28,10 @@ def _empty_indicators() -> Indicators:
         "ema200": None,
         "atr": None,
     }
+
+
+def _has_invalid_values(*values: float) -> bool:
+    return any(not math.isfinite(v) for v in values)
 
 
 @dataclass
@@ -79,6 +90,7 @@ class IndicatorEngine:
         ema_fast_period: int = 50,
         ema_slow_period: int = 200,
         atr_period: int = 20,
+        supported_timeframes: set[Timeframe] | None = None,
     ) -> None:
         self.bb_period = bb_period
         self.bb_std = bb_std
@@ -88,7 +100,7 @@ class IndicatorEngine:
         self.ema_slow_period = ema_slow_period
         self.atr_period = atr_period
         self._states: Dict[Timeframe, _TimeframeState] = {}
-        self._supported_timeframes: set[Timeframe] = {"1m", "15m"}
+        self._supported_timeframes: set[Timeframe] = supported_timeframes or {"1m", "15m"}
 
     def update(self, timeframe: Timeframe, bar: Bar) -> Indicators:
         state = self._get_state(timeframe)
@@ -96,6 +108,10 @@ class IndicatorEngine:
         high = float(bar["high"])
         low = float(bar["low"])
         volume = float(bar["volume"])
+
+        if _has_invalid_values(close, high, low, volume):
+            # Skip update to avoid poisoning cumulative state
+            return state.latest
 
         vwap = self._update_vwap(state, high, low, close, volume)
         bb_upper, bb_middle, bb_lower = self._update_bollinger(state, close)
@@ -129,7 +145,7 @@ class IndicatorEngine:
 
     def _get_state(self, timeframe: Timeframe) -> _TimeframeState:
         if timeframe not in self._supported_timeframes:
-            raise ValueError(f"Unsupported timeframe: {timeframe}")
+            raise UnsupportedTimeframeError(timeframe)
         if timeframe not in self._states:
             self._states[timeframe] = _TimeframeState(
                 bb_closes=deque(maxlen=self.bb_period)
@@ -255,6 +271,7 @@ class IndicatorEngine:
             adx_state.adx = dx
             return adx_state.adx
 
+        # Defensive check: normally initialized above, but guard for corrupted state
         if (
             adx_state.smoothed_tr is None
             or adx_state.smoothed_dm_pos is None

@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from typing import cast
-
 import pytest
 
-from src.core.indicator_engine import IndicatorEngine
-from src.utils import Bar, Timeframe
+from src.core.indicator_engine import IndicatorEngine, UnsupportedTimeframeError
+from src.utils import Bar
 
 
 def make_bar(i: int) -> Bar:
@@ -35,8 +33,8 @@ def test_indicator_engine_requires_warmup() -> None:
     assert first["adx"] is None
     assert first["atr"] is None
 
-    with pytest.raises(ValueError):
-        engine.update(cast(Timeframe, "5m"), make_bar(1))
+    with pytest.raises(UnsupportedTimeframeError):
+        engine.update("5m", make_bar(1))  # type: ignore[arg-type]
 
 
 def test_indicator_engine_produces_indicators_after_warmup() -> None:
@@ -120,3 +118,26 @@ def test_indicator_engine_vwap_respects_volume_weights() -> None:
     latest = engine.update("1m", bar2)
 
     assert latest["vwap"] == pytest.approx(150.0)
+
+
+def test_indicator_engine_skips_nan_bar() -> None:
+    engine = IndicatorEngine()
+    base_bar: Bar = {
+        "open": 100.0,
+        "high": 100.0,
+        "low": 100.0,
+        "close": 100.0,
+        "volume": 10.0,
+        "start_ms": 0,
+        "end_ms": 60_000,
+        "symbol": "BTCUSDT",
+        "timeframe": "1m",
+    }
+    first = engine.update("1m", base_bar)
+    nan_bar: Bar = {
+        **base_bar,
+        "close": float("nan"),
+    }
+
+    second = engine.update("1m", nan_bar)  # should be ignored
+    assert second == first
