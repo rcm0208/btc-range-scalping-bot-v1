@@ -269,6 +269,8 @@ class IndicatorEngine:
             if adx_state.smoothed_tr == 0:
                 adx_state.adx = 0.0
                 return adx_state.adx
+            # Skip smoothing on the seeding bar to avoid double-counting this TR/DM.
+            return None
 
         # Defensive check: normally initialized above, but guard for corrupted state
         if (
