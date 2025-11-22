@@ -296,7 +296,7 @@ class IndicatorEngine:
         if adx_state.adx is None:
             if len(adx_state.dx_window) < self.adx_period:
                 return None
-            adx_state.adx = sum(adx_state.dx_window) / len(adx_state.dx_window)
+            adx_state.adx = sum(adx_state.dx_window) / self.adx_period
         else:
             adx_state.adx = ((adx_state.adx * (self.adx_period - 1)) + dx) / self.adx_period
         return adx_state.adx
