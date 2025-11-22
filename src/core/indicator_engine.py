@@ -265,10 +265,20 @@ class IndicatorEngine:
             adx_state.smoothed_tr = sum(adx_state.tr_window)
             adx_state.smoothed_dm_pos = sum(adx_state.dm_pos_window)
             adx_state.smoothed_dm_neg = sum(adx_state.dm_neg_window)
-            di_pos = 100 * (adx_state.smoothed_dm_pos / adx_state.smoothed_tr) if adx_state.smoothed_tr else 0.0
-            di_neg = 100 * (adx_state.smoothed_dm_neg / adx_state.smoothed_tr) if adx_state.smoothed_tr else 0.0
-            dx = self._compute_dx(di_pos, di_neg)
-            adx_state.adx = dx
+            dx_values: list[float] = []
+            smoothed_tr = adx_state.smoothed_tr
+            smoothed_dm_pos = adx_state.smoothed_dm_pos
+            smoothed_dm_neg = adx_state.smoothed_dm_neg
+            for i in range(self.adx_period):
+                if smoothed_tr == 0:
+                    break
+                di_pos_i = 100 * (smoothed_dm_pos / smoothed_tr)
+                di_neg_i = 100 * (smoothed_dm_neg / smoothed_tr)
+                dx_values.append(self._compute_dx(di_pos_i, di_neg_i))
+            if dx_values:
+                adx_state.adx = sum(dx_values) / len(dx_values)
+            else:
+                adx_state.adx = 0.0
             return adx_state.adx
 
         # Defensive check: normally initialized above, but guard for corrupted state
