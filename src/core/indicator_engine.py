@@ -53,6 +53,7 @@ class _AdxState:
     smoothed_dm_pos: Optional[float] = None
     smoothed_dm_neg: Optional[float] = None
     adx: Optional[float] = None
+    seeded: bool = False
     tr_window: List[float] = field(default_factory=list)
     dm_pos_window: List[float] = field(default_factory=list)
     dm_neg_window: List[float] = field(default_factory=list)
@@ -263,10 +264,15 @@ class IndicatorEngine:
         adx_state.prev_low = low
         adx_state.prev_close = close
 
-        if adx_state.smoothed_tr is None:
+        if not adx_state.seeded:
             adx_state.tr_window.append(tr)
             adx_state.dm_pos_window.append(dm_pos)
             adx_state.dm_neg_window.append(dm_neg)
+
+            # Wait until we have collected adx_period samples
+            if len(adx_state.tr_window) < self.adx_period:
+                return None
+
             adx_state.smoothed_tr = sum(adx_state.tr_window)
             adx_state.smoothed_dm_pos = sum(adx_state.dm_pos_window)
             adx_state.smoothed_dm_neg = sum(adx_state.dm_neg_window)
@@ -274,7 +280,9 @@ class IndicatorEngine:
                 adx_state.dx_window.append(0.0)
                 if len(adx_state.dx_window) >= self.adx_period:
                     adx_state.adx = sum(adx_state.dx_window[-self.adx_period :]) / self.adx_period
+                    adx_state.seeded = True
                     return adx_state.adx
+                adx_state.seeded = True
                 return None
 
             di_pos_seed = 100 * (adx_state.smoothed_dm_pos / adx_state.smoothed_tr)
@@ -287,8 +295,10 @@ class IndicatorEngine:
 
             if len(adx_state.dx_window) >= self.adx_period:
                 adx_state.adx = sum(adx_state.dx_window[-self.adx_period :]) / self.adx_period
+                adx_state.seeded = True
                 return adx_state.adx
 
+            adx_state.seeded = True
             # Skip smoothing on the seeding bar to avoid double-counting this TR/DM.
             return None
 
@@ -297,6 +307,7 @@ class IndicatorEngine:
             adx_state.smoothed_tr is None
             or adx_state.smoothed_dm_pos is None
             or adx_state.smoothed_dm_neg is None
+            or not adx_state.seeded
         ):
             return adx_state.adx
 
