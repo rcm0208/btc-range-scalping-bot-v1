@@ -86,7 +86,7 @@ def test_indicator_engine_precise_on_flat_series() -> None:
     assert latest["bb_upper"] == pytest.approx(100.0)
     assert latest["bb_middle"] == pytest.approx(100.0)
     assert latest["bb_lower"] == pytest.approx(100.0)
-    assert latest["rsi"] == pytest.approx(100.0)
+    assert latest["rsi"] == pytest.approx(50.0)
     assert latest["adx"] == pytest.approx(0.0)
     assert latest["atr"] == pytest.approx(0.0)
 

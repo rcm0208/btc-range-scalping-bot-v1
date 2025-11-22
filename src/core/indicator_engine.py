@@ -202,6 +202,8 @@ class IndicatorEngine:
         ) / self.rsi_period
 
         if rsi_state.avg_loss == 0:
+            if rsi_state.avg_gain == 0:
+                return 50.0
             return 100.0
         rs = rsi_state.avg_gain / rsi_state.avg_loss
         return 100 - (100 / (1 + rs))
