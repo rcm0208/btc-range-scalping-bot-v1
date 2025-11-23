@@ -272,9 +272,9 @@ def test_enter_short_when_conditions_met() -> None:
 def test_exit_on_take_profit_hits_high() -> None:
     core = StrategyCore(default_params(), default_entry_params())
     bar_1m: Bar = {
-        **make_bar(close=101.0, timeframe="1m"),
-        "high": 102.0,
-        "low": 100.5,
+        **make_bar(close=101.6, timeframe="1m"),
+        "high": 101.6,
+        "low": 101.0,
     }
     indicators_1m: Indicators = {
         "vwap": None,
@@ -305,9 +305,9 @@ def test_exit_on_take_profit_hits_high() -> None:
 def test_exit_on_stop_loss_hits_low_for_short() -> None:
     core = StrategyCore(default_params(), default_entry_params())
     bar_1m: Bar = {
-        **make_bar(close=100.5, timeframe="1m"),
-        "high": 102.0,
-        "low": 99.2,
+        **make_bar(close=101.2, timeframe="1m"),
+        "high": 101.3,
+        "low": 100.8,
     }
     indicators_1m: Indicators = {
         "vwap": None,
