@@ -64,6 +64,17 @@ class PnlStats(TypedDict):
     losing_streak: int
 
 
+class OpenPosition(TypedDict):
+    """strategy_core が exit 判定に用いるシンプルなポジション情報。"""
+
+    side: Side
+    entry_price: float
+    entry_time_ms: int
+    tp_level: float
+    sl_level: float
+    timeout_ms: int
+
+
 __all__ = [
     "Bar",
     "Indicators",
@@ -73,4 +84,5 @@ __all__ = [
     "Side",
     "SignalType",
     "Timeframe",
+    "OpenPosition",
 ]

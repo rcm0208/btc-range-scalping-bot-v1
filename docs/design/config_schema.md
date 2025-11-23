@@ -13,6 +13,7 @@
 - tp_pct: float (e.g., 0.003)  # +0.30%
 - sl_pct: float (e.g., -0.0022) # -0.22%
 - timeout_minutes: int (e.g., 12)
+- pin_bar_ratio: float (e.g., 2.0)  # ピンバーのヒゲ/実体比率
 - atr_spike_multiplier: float (e.g., 2.5)
 - atr_low_vol_threshold: float (optional, TBD via BT)
 - regime:  # レンジ判定関連のまとめ
@@ -21,6 +22,7 @@
   - ema_flatness_threshold: float (TBD)   # EMA50/200 の傾きしきい値
   - ema_spread_pct_max: float (e.g., 0.0015) # EMA50/200 乖離の上限（BTで調整）
   - vwap_reversion_check: bool (true)
+  - vwap_deviation_pct_max: float (e.g., 0.005) # VWAP乖離の上限（未設定時はbb_width_pct_maxを使用）
 - candle_intervals:
   - trend: "15m"
   - signal: "1m"

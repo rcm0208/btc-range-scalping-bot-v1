@@ -9,6 +9,7 @@ rsi_short_min: 75
 tp_pct: 0.003
 sl_pct: -0.0022
 timeout_minutes: 12
+pin_bar_ratio: 2.0  # ピンバーのヒゲ/実体比率
 atr_spike_multiplier: 2.5
 atr_low_vol_threshold: null
 regime:
@@ -17,6 +18,7 @@ regime:
   ema_flatness_threshold: 0.0001
   ema_spread_pct_max: 0.0015
   vwap_reversion_check: true
+  vwap_deviation_pct_max: 0.005  # VWAP乖離の上限（未設定時はbb_width_pct_maxを使用）
 schedule:
   enabled: false
   windows: []

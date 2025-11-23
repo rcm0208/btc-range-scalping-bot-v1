@@ -25,8 +25,8 @@
 
 ## strategy_core
 
-- [ ] [T20] レジーム判定: ADX/BB 幅/EMA 平行性・乖離/VWAP 回帰チェックで Range ON/OFF を状態保持する。参照: `docs/design/strategy_core.md`（レジーム）、`docs/requirements.md`。（依存: T11）
-- [ ] [T21] シグナル生成: VWAP 乖離・BB タッチ・RSI・簡易反転足でエントリー、TP/SL/タイムアウトで決済。Signal 構造体を定義し、ON/OFF/エントリー各 1 ケースのユニットテストを追加。参照: `docs/design/strategy_core.md`（エントリー/決済）。 （依存: T20）
+- [x] [T20] レジーム判定: ADX/BB 幅/EMA 平行性・乖離/VWAP 回帰チェックで Range ON/OFF を状態保持する。参照: `docs/design/strategy_core.md`（レジーム）、`docs/requirements.md`。（依存: T11）
+- [x] [T21] シグナル生成: VWAP 乖離・BB タッチ・RSI・簡易反転足でエントリー、TP/SL/タイムアウトで決済。Signal 構造体を定義し、ON/OFF/エントリー各 1 ケースのユニットテストを追加。参照: `docs/design/strategy_core.md`（エントリー/決済）。 （依存: T20）
 
 ## risk_manager
 
