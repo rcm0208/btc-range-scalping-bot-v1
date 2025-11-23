@@ -7,7 +7,10 @@ from src.utils import Bar, Indicators, OpenPosition, Timeframe
 
 
 def make_bar(close: float = 100.0, timeframe: Timeframe = "15m") -> Bar:
-    duration_ms = 60_000 if timeframe == "1m" else 900_000 if timeframe == "15m" else 60_000
+    timeframe_to_ms = {"1m": 60_000, "15m": 900_000}
+    if timeframe not in timeframe_to_ms:
+        raise ValueError(f"Unsupported timeframe in test: {timeframe}")
+    duration_ms = timeframe_to_ms[timeframe]
     return {
         "open": close,
         "high": close,

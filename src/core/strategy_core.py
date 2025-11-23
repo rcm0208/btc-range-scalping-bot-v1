@@ -207,17 +207,51 @@ class StrategyCore:
         elapsed = now_ms - open_position["entry_time_ms"]
 
         close = float(bar_1m["close"])
+        high = float(bar_1m["high"])
+        low = float(bar_1m["low"])
 
         if side == "long":
-            if close <= sl:
-                return self._make_signal("exit", side, "stop_loss", tp, sl, timeout_ms, {"hit": "sl", "price": close})
-            if close >= tp:
-                return self._make_signal("exit", side, "take_profit", tp, sl, timeout_ms, {"hit": "tp", "price": close})
+            if low <= sl:
+                return self._make_signal(
+                    "exit",
+                    side,
+                    "stop_loss",
+                    tp,
+                    sl,
+                    timeout_ms,
+                    {"hit": "sl", "price": low},
+                )
+            if high >= tp:
+                return self._make_signal(
+                    "exit",
+                    side,
+                    "take_profit",
+                    tp,
+                    sl,
+                    timeout_ms,
+                    {"hit": "tp", "price": high},
+                )
         else:
-            if close >= sl:
-                return self._make_signal("exit", side, "stop_loss", tp, sl, timeout_ms, {"hit": "sl", "price": close})
-            if close <= tp:
-                return self._make_signal("exit", side, "take_profit", tp, sl, timeout_ms, {"hit": "tp", "price": close})
+            if high >= sl:
+                return self._make_signal(
+                    "exit",
+                    side,
+                    "stop_loss",
+                    tp,
+                    sl,
+                    timeout_ms,
+                    {"hit": "sl", "price": high},
+                )
+            if low <= tp:
+                return self._make_signal(
+                    "exit",
+                    side,
+                    "take_profit",
+                    tp,
+                    sl,
+                    timeout_ms,
+                    {"hit": "tp", "price": low},
+                )
 
         if elapsed >= timeout_ms:
             return self._make_signal("exit", side, "timeout", tp, sl, timeout_ms, {"elapsed_ms": elapsed})
