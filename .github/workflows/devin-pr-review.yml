@@ -1,0 +1,28 @@
+name: PRがレビュー待ちになったらSlackでDevinに依頼
+
+on:
+  pull_request:
+    types:
+      - labeled
+      - ready_for_review
+
+permissions:
+  contents: read
+
+jobs:
+  notify-slack:
+    if: >
+      github.event.pull_request.draft == false &&
+      contains(github.event.pull_request.labels.*.name, 'devin')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Slackへメンション付き依頼を送信
+        uses: slackapi/slack-github-action@v1.27.0
+        with:
+          channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
+          payload: |
+            {
+              "text": "<@${{ secrets.DEVIN_SLACK_USER_ID }}> CC <@${{ secrets.SLACK_USER_ID }}> このPRのレビューを日本語でお願いします。\n${{ github.event.pull_request.html_url }}\n\n## 役割\nあなたはシニアエンジニアとして、Pull Requestのコードレビューを行います。\n\n## レビュー観点（優先度順）\n\n### 🔴 最優先（Critical）\n1. 仕様（@docs/requirements.md）に沿って正しく動作しているか\n2. セキュリティ面の問題はないか\n3. 既存機能への影響や破壊的変更がないか\n\n### 🟡 重要（High）\n4. パフォーマンスやリソース効率に問題はないか\n5. テストや再現手順が適切に示されているか\n\n### 🟢 推奨（Medium）\n6. コードの可読性・保守性は十分か（命名・コメント・責務分離など）\n\n### 🔵 任意（Low - リファクタリング提案）\n7. より良い設計パターンや実装方法の提案\n8. 重複コードの削減や共通化の機会\n9. 将来的な拡張性を考慮した改善案\n\n必要に応じて修正提案や改善点の詳細をPRにコメントで残してください。\nSlackのスレッドにはレビュー結果の要約、PRのリンク、Devinのセッションリンクを報告してください。"
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
