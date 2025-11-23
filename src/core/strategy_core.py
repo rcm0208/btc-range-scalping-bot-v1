@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, cast
+from typing import Dict, Optional, TypedDict, cast
 
-from src.utils import Bar, Indicators, OpenPosition, Side, Signal
+from src.utils import Bar, Indicators, OpenPosition, Side, Signal, SignalType
 
 
 @dataclass
@@ -15,6 +15,7 @@ class RegimeParams:
     ema_flatness_threshold: float
     ema_spread_pct_max: float
     vwap_reversion_check: bool = True
+    vwap_deviation_pct_max: float | None = None  # None時はbb_width_pct_maxを使用
 
 
 @dataclass
@@ -37,6 +38,16 @@ class EntryParams:
     tp_pct: float
     sl_pct: float
     timeout_minutes: int
+    pin_bar_ratio: float = 2.0  # ピンバーのヒゲ/実体比率
+
+
+class _EntryEvaluation(TypedDict):
+    """エントリー条件の評価結果（モジュール内部用）。"""
+
+    vwap_dev: float
+    rsi: float
+    bb_touch: bool
+    reversal: bool
 
 
 class StrategyCore:
@@ -165,6 +176,7 @@ class StrategyCore:
         else:
             flat_enough = False
 
+        # ADX閾値: <= を使用（設計書の「ADX < 20」に対し、境界値20をレンジ扱い）
         conditions = [
             (adx_f <= params.adx_max, "adx_above_threshold"),
             (
@@ -179,10 +191,16 @@ class StrategyCore:
         ]
 
         if params.vwap_reversion_check:
+            # VWAP乖離の閾値: vwap_deviation_pct_maxが未設定の場合はbb_width_pct_maxを使用
+            effective_vwap_max = (
+                params.vwap_deviation_pct_max
+                if params.vwap_deviation_pct_max is not None
+                else params.bb_width_pct_max
+            )
             conditions.append(
                 (
                     vwap_deviation_pct is not None
-                    and vwap_deviation_pct <= params.bb_width_pct_max,
+                    and vwap_deviation_pct <= effective_vwap_max,
                     "vwap_not_reverting",
                 )
             )
@@ -360,7 +378,7 @@ class StrategyCore:
         vwap: float,
         rsi: float,
         params: EntryParams,
-    ) -> Optional[Dict[str, float]]:
+    ) -> Optional[_EntryEvaluation]:
         bb_touch = close <= bb_lower
         vwap_dev = self._vwap_deviation_pct(vwap, close, bias="below")
         reversal = self._bullish_reversal(open_, close, low, bb_lower)
@@ -374,8 +392,8 @@ class StrategyCore:
             return {
                 "vwap_dev": vwap_dev,
                 "rsi": rsi,
-                "bb_touch": 1.0,
-                "reversal": 1.0,
+                "bb_touch": True,
+                "reversal": True,
             }
         return None
 
@@ -389,7 +407,7 @@ class StrategyCore:
         vwap: float,
         rsi: float,
         params: EntryParams,
-    ) -> Optional[Dict[str, float]]:
+    ) -> Optional[_EntryEvaluation]:
         bb_touch = close >= bb_upper
         vwap_dev = self._vwap_deviation_pct(vwap, close, bias="above")
         reversal = self._bearish_reversal(open_, close, high, bb_upper)
@@ -403,23 +421,37 @@ class StrategyCore:
             return {
                 "vwap_dev": vwap_dev,
                 "rsi": rsi,
-                "bb_touch": 1.0,
-                "reversal": 1.0,
+                "bb_touch": True,
+                "reversal": True,
             }
         return None
 
     def _bullish_reversal(self, open_: float, close: float, low: float, bb_lower: float) -> bool:
+        """
+        強気反転パターンの判定。
+        - outside_in: バンド外で始まりバンド境界で終値（close >= bb_lower かつ open_ <= bb_lower）
+        - pin_bar: 下ヒゲが実体のpin_bar_ratio倍以上
+        注: outside_in条件とbb_touch条件の組み合わせにより、実質的にclose == bb_lowerのケースが該当
+        """
         body = abs(close - open_)
         lower_wick = min(open_, close) - low
         outside_in = open_ <= bb_lower and close >= bb_lower
-        pin_bar = lower_wick >= body * 2 if body > 0 else lower_wick > 0
+        ratio = self.entry_params.pin_bar_ratio
+        pin_bar = lower_wick >= body * ratio if body > 0 else lower_wick > 0
         return outside_in or pin_bar
 
     def _bearish_reversal(self, open_: float, close: float, high: float, bb_upper: float) -> bool:
+        """
+        弱気反転パターンの判定。
+        - outside_in: バンド外で始まりバンド境界で終値（close <= bb_upper かつ open_ >= bb_upper）
+        - pin_bar: 上ヒゲが実体のpin_bar_ratio倍以上
+        注: outside_in条件とbb_touch条件の組み合わせにより、実質的にclose == bb_upperのケースが該当
+        """
         body = abs(close - open_)
         upper_wick = high - max(open_, close)
         outside_in = open_ >= bb_upper and close <= bb_upper
-        pin_bar = upper_wick >= body * 2 if body > 0 else upper_wick > 0
+        ratio = self.entry_params.pin_bar_ratio
+        pin_bar = upper_wick >= body * ratio if body > 0 else upper_wick > 0
         return outside_in or pin_bar
 
     def _vwap_deviation_pct(self, vwap: float, price: float, bias: str) -> Optional[float]:
@@ -431,7 +463,7 @@ class StrategyCore:
 
     def _make_signal(
         self,
-        signal_type: str,
+        signal_type: SignalType,
         side: Optional[Side],
         reason: str,
         tp_level: Optional[float],
@@ -440,7 +472,7 @@ class StrategyCore:
         context: Optional[Dict[str, object]],
     ) -> Signal:
         return {
-            "type": signal_type,  # type: ignore[assignment]
+            "type": signal_type,
             "side": side,
             "reason": reason,
             "tp_level": tp_level,

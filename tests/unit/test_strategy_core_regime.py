@@ -227,6 +227,33 @@ def test_regime_off_when_vwap_not_reverting() -> None:
     assert result.reason == "vwap_not_reverting"
 
 
+def test_regime_on_when_vwap_reversion_check_disabled() -> None:
+    """vwap_reversion_check=Falseの場合、VWAP乖離が大きくてもレンジONになることを確認"""
+    params = RegimeParams(
+        adx_max=20,
+        bb_width_pct_max=0.005,
+        ema_flatness_threshold=0.0001,
+        ema_spread_pct_max=0.0015,
+        vwap_reversion_check=False,  # VWAPチェックを無効化
+    )
+    core = StrategyCore(params, default_entry_params())
+    bar = make_bar()
+    indicators = make_indicators(
+        adx=15,
+        bb_upper=100.1,
+        bb_lower=99.9,
+        ema50=100.0,
+        ema200=100.0,
+        vwap=100.0,
+    )
+    core.update_regime(bar, indicators)  # seed
+    # VWAP乖離が大きい（2%）が、vwap_reversion_check=Falseなのでレンジ判定はON
+    far_price = make_bar(close=102.0, timeframe="15m")
+    result = core.update_regime(far_price, indicators)
+    assert result.is_range
+    assert result.reason == "range_on"
+
+
 def test_skip_when_regime_off() -> None:
     core = StrategyCore(default_params(), default_entry_params())
     bar_1m = make_bar(close=100.0)
