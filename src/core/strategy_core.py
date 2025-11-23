@@ -42,7 +42,7 @@ class EntryParams:
 
 
 class _EntryEvaluation(TypedDict):
-    """エントリー条件の評価結果（モジュール内部用）。"""
+    """エントリー条件の評価結果(モジュール内部用)。"""
 
     vwap_dev: float
     rsi: float
@@ -176,7 +176,7 @@ class StrategyCore:
         else:
             flat_enough = False
 
-        # ADX閾値: <= を使用（設計書の「ADX < 20」に対し、境界値20をレンジ扱い）
+        # ADX閾値: <= を使用(設計書の「ADX < 20」に対し、境界値20をレンジ扱い)
         conditions = [
             (adx_f <= params.adx_max, "adx_above_threshold"),
             (
@@ -429,7 +429,7 @@ class StrategyCore:
     def _bullish_reversal(self, open_: float, close: float, low: float, bb_lower: float) -> bool:
         """
         強気反転パターンの判定。
-        - outside_in: バンド外で始まりバンド境界で終値（close >= bb_lower かつ open_ <= bb_lower）
+        - outside_in: バンド外で始まりバンド境界で終値(close >= bb_lower かつ open_ <= bb_lower)
         - pin_bar: 下ヒゲが実体のpin_bar_ratio倍以上
         注: outside_in条件とbb_touch条件の組み合わせにより、実質的にclose == bb_lowerのケースが該当
         """
@@ -443,7 +443,7 @@ class StrategyCore:
     def _bearish_reversal(self, open_: float, close: float, high: float, bb_upper: float) -> bool:
         """
         弱気反転パターンの判定。
-        - outside_in: バンド外で始まりバンド境界で終値（close <= bb_upper かつ open_ >= bb_upper）
+        - outside_in: バンド外で始まりバンド境界で終値(close <= bb_upper かつ open_ >= bb_upper)
         - pin_bar: 上ヒゲが実体のpin_bar_ratio倍以上
         注: outside_in条件とbb_touch条件の組み合わせにより、実質的にclose == bb_upperのケースが該当
         """

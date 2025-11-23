@@ -247,7 +247,7 @@ def test_regime_on_when_vwap_reversion_check_disabled() -> None:
         vwap=100.0,
     )
     core.update_regime(bar, indicators)  # seed
-    # VWAP乖離が大きい（2%）が、vwap_reversion_check=Falseなのでレンジ判定はON
+    # VWAP乖離が大きい(2%)が、vwap_reversion_check=Falseなのでレンジ判定はON
     far_price = make_bar(close=102.0, timeframe="15m")
     result = core.update_regime(far_price, indicators)
     assert result.is_range
