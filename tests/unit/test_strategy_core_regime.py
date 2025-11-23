@@ -5,11 +5,13 @@ import pytest
 from src.core.strategy_core import EntryParams, RegimeEvaluation, RegimeParams, StrategyCore
 from src.utils import Bar, Indicators, OpenPosition, Timeframe
 
+UNSUPPORTED_TIMEFRAME_MSG = "Unsupported timeframe in test: {}"
+
 
 def make_bar(close: float = 100.0, timeframe: Timeframe = "15m") -> Bar:
     timeframe_to_ms = {"1m": 60_000, "15m": 900_000}
     if timeframe not in timeframe_to_ms:
-        raise ValueError(f"Unsupported timeframe in test: {timeframe}")
+        raise ValueError(UNSUPPORTED_TIMEFRAME_MSG.format(timeframe))
     duration_ms = timeframe_to_ms[timeframe]
     return {
         "open": close,

@@ -152,14 +152,18 @@ class StrategyCore:
 
         params = self.regime_params
         flat_ready = ema50_slope_pct is not None and ema200_slope_pct is not None
-        flat_enough = (
-            flat_ready
-            and ema50_slope_pct is not None
-            and ema200_slope_pct is not None
-            and ema50_slope_pct <= params.ema_flatness_threshold
-            and ema200_slope_pct <= params.ema_flatness_threshold
-        )
         flat_reason = "ema_slope_uninitialized" if not flat_ready else "ema_not_flat"
+
+        flat_enough = False
+        if flat_ready:
+            ema50_slope_val = cast(float, ema50_slope_pct)
+            ema200_slope_val = cast(float, ema200_slope_pct)
+            flat_enough = (
+                ema50_slope_val <= params.ema_flatness_threshold
+                and ema200_slope_val <= params.ema_flatness_threshold
+            )
+        else:
+            flat_enough = False
 
         conditions = [
             (adx_f <= params.adx_max, "adx_above_threshold"),
@@ -206,7 +210,6 @@ class StrategyCore:
         now_ms = int(bar_1m["end_ms"])
         elapsed = now_ms - open_position["entry_time_ms"]
 
-        close = float(bar_1m["close"])
         high = float(bar_1m["high"])
         low = float(bar_1m["low"])
 
@@ -306,7 +309,7 @@ class StrategyCore:
                 tp_level,
                 sl_level,
                 params.timeout_minutes * 60_000,
-                self._as_context(long_candidate),
+                {**long_candidate},
             )
 
         short_candidate = self._evaluate_short(
@@ -328,7 +331,7 @@ class StrategyCore:
                 tp_level,
                 sl_level,
                 params.timeout_minutes * 60_000,
-                self._as_context(short_candidate),
+                {**short_candidate},
             )
 
         return self._make_signal(
@@ -445,10 +448,6 @@ class StrategyCore:
             "timeout_ms": timeout_ms,
             "context": context,
         }
-
-    @staticmethod
-    def _as_context(data: Dict[str, float]) -> Dict[str, object]:
-        return {k: v for k, v in data.items()}
 
     def _compute_pct(self, numerator: float, denominator: float) -> Optional[float]:
         if denominator <= 0:
