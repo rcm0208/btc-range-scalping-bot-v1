@@ -3,10 +3,10 @@ from __future__ import annotations
 import pytest
 
 from src.core.strategy_core import EntryParams, RegimeEvaluation, RegimeParams, StrategyCore
-from src.utils import Bar, Indicators, OpenPosition
+from src.utils import Bar, Indicators, OpenPosition, Timeframe
 
 
-def make_bar(close: float = 100.0) -> Bar:
+def make_bar(close: float = 100.0, timeframe: Timeframe = "15m") -> Bar:
     return {
         "open": close,
         "high": close,
@@ -16,7 +16,7 @@ def make_bar(close: float = 100.0) -> Bar:
         "start_ms": 0,
         "end_ms": 60_000,
         "symbol": "BTCUSDT",
-        "timeframe": "15m",
+        "timeframe": timeframe,  # 明示的に足種を指定できるようにする
     }
 
 
@@ -162,7 +162,7 @@ def test_skip_when_regime_off() -> None:
 
 def test_hold_when_no_entry_conditions_met() -> None:
     core = StrategyCore(default_params(), default_entry_params())
-    bar_15m = make_bar(close=100.0)
+    bar_15m = make_bar(close=100.0, timeframe="15m")
     indicators_15m = make_indicators(
         adx=15,
         bb_upper=100.1,
@@ -174,7 +174,7 @@ def test_hold_when_no_entry_conditions_met() -> None:
     core.update_regime(bar_15m, indicators_15m)
     core.update_regime(bar_15m, indicators_15m)
 
-    bar_1m = make_bar(close=100.0)
+    bar_1m = make_bar(close=100.0, timeframe="1m")
     indicators_1m: Indicators = {
         "vwap": 100.0,
         "bb_upper": 101.0,
@@ -193,7 +193,7 @@ def test_hold_when_no_entry_conditions_met() -> None:
 
 def test_enter_long_when_conditions_met() -> None:
     core = StrategyCore(default_params(), default_entry_params())
-    bar_15m = make_bar(close=100.0)
+    bar_15m = make_bar(close=100.0, timeframe="15m")
     indicators_15m = make_indicators(
         adx=15,
         bb_upper=100.2,
@@ -206,7 +206,7 @@ def test_enter_long_when_conditions_met() -> None:
     core.update_regime(bar_15m, indicators_15m)
 
     bar_1m: Bar = {
-        **make_bar(close=99.2),
+        **make_bar(close=99.2, timeframe="1m"),
         "open": 98.9,
         "high": 99.4,
         "low": 98.7,
@@ -230,10 +230,49 @@ def test_enter_long_when_conditions_met() -> None:
     assert signal["sl_level"] is not None and signal["sl_level"] < bar_1m["close"]
 
 
+def test_enter_short_when_conditions_met() -> None:
+    core = StrategyCore(default_params(), default_entry_params())
+    bar_15m = make_bar(close=100.0, timeframe="15m")
+    indicators_15m = make_indicators(
+        adx=15,
+        bb_upper=100.2,
+        bb_lower=99.8,
+        ema50=100.0,
+        ema200=100.0,
+        vwap=100.0,
+    )
+    core.update_regime(bar_15m, indicators_15m)
+    core.update_regime(bar_15m, indicators_15m)
+
+    bar_1m: Bar = {
+        **make_bar(close=100.65, timeframe="1m"),
+        "open": 100.8,
+        "high": 100.9,
+        "low": 100.5,
+    }
+    indicators_1m: Indicators = {
+        "vwap": 100.0,
+        "bb_upper": 100.65,
+        "bb_middle": 100.0,
+        "bb_lower": 99.35,
+        "rsi": 80.0,
+        "adx": None,
+        "ema50": None,
+        "ema200": None,
+        "atr": None,
+    }
+
+    signal = core.update(bar_1m, indicators_1m)
+    assert signal["type"] == "enter"
+    assert signal["side"] == "short"
+    assert signal["tp_level"] is not None and signal["tp_level"] < bar_1m["close"]
+    assert signal["sl_level"] is not None and signal["sl_level"] > bar_1m["close"]
+
+
 def test_exit_on_take_profit_hits_high() -> None:
     core = StrategyCore(default_params(), default_entry_params())
     bar_1m: Bar = {
-        **make_bar(close=101.0),
+        **make_bar(close=101.0, timeframe="1m"),
         "high": 102.0,
         "low": 100.5,
     }
@@ -261,3 +300,101 @@ def test_exit_on_take_profit_hits_high() -> None:
     assert signal["type"] == "exit"
     assert signal["reason"] == "take_profit"
     assert signal["side"] == "long"
+
+
+def test_exit_on_stop_loss_hits_low_for_short() -> None:
+    core = StrategyCore(default_params(), default_entry_params())
+    bar_1m: Bar = {
+        **make_bar(close=100.5, timeframe="1m"),
+        "high": 102.0,
+        "low": 99.2,
+    }
+    indicators_1m: Indicators = {
+        "vwap": None,
+        "bb_upper": None,
+        "bb_middle": None,
+        "bb_lower": None,
+        "rsi": None,
+        "adx": None,
+        "ema50": None,
+        "ema200": None,
+        "atr": None,
+    }
+    open_position: OpenPosition = {
+        "side": "short",
+        "entry_price": 100.0,
+        "entry_time_ms": 0,
+        "tp_level": 99.0,
+        "sl_level": 101.0,
+        "timeout_ms": 120_000,
+    }
+
+    signal = core.update(bar_1m, indicators_1m, open_position=open_position)
+    assert signal["type"] == "exit"
+    assert signal["reason"] == "stop_loss"
+    assert signal["side"] == "short"
+
+
+def test_hold_when_position_open_and_not_hitting_exit() -> None:
+    core = StrategyCore(default_params(), default_entry_params())
+    bar_1m: Bar = {
+        **make_bar(close=100.0, timeframe="1m"),
+        "high": 100.1,
+        "low": 99.9,
+    }
+    indicators_1m: Indicators = {
+        "vwap": 100.0,
+        "bb_upper": 101.0,
+        "bb_middle": 100.0,
+        "bb_lower": 99.0,
+        "rsi": 50.0,
+        "adx": None,
+        "ema50": None,
+        "ema200": None,
+        "atr": None,
+    }
+    open_position: OpenPosition = {
+        "side": "long",
+        "entry_price": 100.0,
+        "entry_time_ms": 0,
+        "tp_level": 101.0,
+        "sl_level": 99.0,
+        "timeout_ms": 120_000,
+    }
+
+    signal = core.update(bar_1m, indicators_1m, open_position=open_position)
+    assert signal["type"] == "hold"
+    assert signal["side"] == "long"
+    assert signal["reason"] == "position_open_hold"
+
+
+def test_indicators_missing_returns_hold() -> None:
+    core = StrategyCore(default_params(), default_entry_params())
+    bar_15m = make_bar(close=100.0, timeframe="15m")
+    indicators_15m = make_indicators(
+        adx=15,
+        bb_upper=100.2,
+        bb_lower=99.8,
+        ema50=100.0,
+        ema200=100.0,
+        vwap=100.0,
+    )
+    core.update_regime(bar_15m, indicators_15m)
+    core.update_regime(bar_15m, indicators_15m)
+
+    bar_1m = make_bar(close=100.0, timeframe="1m")
+    indicators_1m: Indicators = {
+        "vwap": None,
+        "bb_upper": None,
+        "bb_middle": None,
+        "bb_lower": None,
+        "rsi": None,
+        "adx": None,
+        "ema50": None,
+        "ema200": None,
+        "atr": None,
+    }
+
+    signal = core.update(bar_1m, indicators_1m)
+    assert signal["type"] == "hold"
+    assert signal["reason"] == "indicators_missing"

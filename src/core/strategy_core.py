@@ -64,6 +64,16 @@ class StrategyCore:
         exit_signal = self._maybe_exit(bar_1m, open_position)
         if exit_signal:
             return exit_signal
+        if open_position is not None:
+            return self._make_signal(
+                "hold",
+                open_position["side"],
+                "position_open_hold",
+                open_position["tp_level"],
+                open_position["sl_level"],
+                open_position["timeout_ms"],
+                {"regime_on": self.regime_on},
+            )
 
         if not self.regime_on:
             return self._make_signal(
@@ -429,4 +439,4 @@ class StrategyCore:
             self._prev_ema200 = ema200
 
 
-__all__ = ["StrategyCore", "RegimeParams", "RegimeEvaluation", "EntryParams"]
+__all__ = ["EntryParams", "RegimeEvaluation", "RegimeParams", "StrategyCore"]

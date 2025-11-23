@@ -84,4 +84,5 @@ __all__ = [
     "Side",
     "SignalType",
     "Timeframe",
+    "OpenPosition",
 ]
