@@ -81,6 +81,10 @@ class RiskManager:
         ):
             self.state.stopped_reason = self.state.stopped_reason or "daily_loss"
 
+    def on_enter(self) -> None:
+        """エントリー確定時に同時ポジションカウントを増やす。"""
+        self.state.open_positions += 1
+
     def reset_daily(self, now: datetime) -> None:
         """日次境界で状態をリセットする。now は I/F 整合性のために受け取り、将来の境界判定用に予約。"""
         _ = now  # lint 回避・将来利用のため保持
@@ -101,7 +105,9 @@ class RiskManager:
 
     def _sync_state_from_pnl(self, pnl_stats: PnlStats) -> None:
         """外部から渡された損益情報でステートを更新する。"""
-        self.state.open_positions = pnl_stats["open_positions"]
+        # open_positions は内部カウントを下回らないようにマージする
+        self.state.open_positions = max(self.state.open_positions, pnl_stats["open_positions"])
+        # losing_streak/daily_realized_pct は外部情報を優先（最新集計を想定）
         self.state.losing_streak = pnl_stats["losing_streak"]
         self.state.daily_realized_pct = pnl_stats["daily_realized_pct"]
 
@@ -121,4 +127,4 @@ class RiskManager:
         return now < cooldown_end
 
 
-__all__ = ["RiskParams", "RiskState", "RiskManager"]
+__all__ = ["RiskManager", "RiskParams", "RiskState"]

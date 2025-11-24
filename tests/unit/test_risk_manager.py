@@ -159,3 +159,16 @@ def test_current_state_returns_copy() -> None:
     state_copy.open_positions = 5
 
     assert manager.state.open_positions == 0
+
+
+def test_on_enter_increments_and_blocks_additional_entries() -> None:
+    manager = RiskManager(make_params(max_open_positions=1))
+    now = datetime(2025, 1, 1, 12, 0, 0)
+
+    allowed_first = manager.can_enter(now, make_stats())
+    assert allowed_first["allowed"] is True
+
+    manager.on_enter()
+    blocked = manager.can_enter(now, make_stats())
+    assert blocked["allowed"] is False
+    assert blocked["reason"] == "already_open"
