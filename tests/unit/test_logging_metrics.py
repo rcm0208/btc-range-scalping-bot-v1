@@ -42,8 +42,8 @@ def test_metrics_recorder_snapshot_and_win_rate() -> None:
     metrics.record_trade(is_win=None)
     metrics.record_cancel()
     metrics.record_api_error()
-    metrics.add_metric("latency_ms", 100.0)
-    metrics.add_metric("latency_ms", 50.0)
+    metrics.increment_metric("latency_ms", 100.0)
+    metrics.increment_metric("latency_ms", 50.0)
 
     snap = metrics.snapshot()
     assert snap["trades"] == 3

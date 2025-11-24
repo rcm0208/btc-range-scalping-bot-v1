@@ -75,15 +75,21 @@ class _EnvLoggerAdapter(logging.LoggerAdapter):  # type: ignore[misc]
 
 
 def get_json_logger(name: str, env: str, level: int = logging.INFO) -> logging.LoggerAdapter:
-    """Create or get a LoggerAdapter configured with JSON formatter and env label."""
+    """Create or get a LoggerAdapter configured with JSON formatter and env label.
+
+    Note: Sets propagate=False to prevent duplicate output in parent loggers.
+    """
     logger = logging.getLogger(name)
     logger.setLevel(level)
-    has_json_handler = any(isinstance(h.formatter, JsonFormatter) for h in logger.handlers if isinstance(h, logging.StreamHandler))
+    has_json_handler = any(
+        isinstance(getattr(h, "formatter", None), JsonFormatter)
+        for h in logger.handlers
+    )
     if not has_json_handler:
         handler = logging.StreamHandler()
         handler.setFormatter(JsonFormatter())
         logger.addHandler(handler)
-    logger.propagate = False
+        logger.propagate = False
     adapter: logging.LoggerAdapter = _EnvLoggerAdapter(logger, {"env": env})  # type: ignore[assignment]
     return adapter
 
@@ -112,7 +118,8 @@ class MetricsRecorder:
     def record_api_error(self) -> None:
         self.api_errors += 1
 
-    def add_metric(self, key: str, value: float) -> None:
+    def increment_metric(self, key: str, value: float) -> None:
+        """Increment (accumulate) the custom metric by the given value."""
         self.custom[key] = self.custom.get(key, 0.0) + value
 
     def snapshot(self) -> Mapping[str, Any]:

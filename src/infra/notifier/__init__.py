@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 class MissingWebhookError(ValueError):
     """Webhook URL が未設定の場合の例外。"""
 
+    def __init__(self) -> None:
+        super().__init__("Slack webhook URL is required")
+
 
 def _should_give_up(exc: Exception) -> bool:
     """バックオフを諦める条件(主に4xxクライアントエラー)。"""
@@ -24,12 +27,12 @@ def _should_give_up(exc: Exception) -> bool:
 class Notifier:
     """Slack Webhook 送信の簡易ラッパー。"""
 
-    def __init__(self, webhook_url: str, environment: str) -> None:
+    def __init__(self, webhook_url: str, environment: str, timeout: float = 5.0) -> None:
         if not webhook_url:
-            raise MissingWebhookError("Slack webhook URL is required")
+            raise MissingWebhookError()
         self.webhook_url = webhook_url
         self.environment = environment
-        self.client = httpx.Client(timeout=5.0)
+        self.client = httpx.Client(timeout=timeout)
 
     def __enter__(self) -> "Notifier":
         return self
@@ -50,7 +53,7 @@ class Notifier:
         backoff.expo,
         httpx.HTTPError,
         max_tries=3,
-        jitter=None,
+        jitter=backoff.full_jitter,
         giveup=_should_give_up,
     )
     def notify(self, event: Mapping[str, Any]) -> None:
