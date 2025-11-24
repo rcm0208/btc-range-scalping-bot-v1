@@ -48,11 +48,11 @@ class Signal(TypedDict):
     context: Optional[Mapping[str, Any]]
 
 
-class CheckResult(TypedDict, total=False):
+class CheckResult(TypedDict):
     """risk_manager による可否判定。"""
 
     allowed: bool
-    reason: NotRequired[str]
+    reason: Optional[str]
 
 
 class PnlStats(TypedDict):

@@ -30,8 +30,8 @@
 
 ## risk_manager
 
-- [ ] [T30] 制限実装: 同時ポジ=1、クールダウン、連敗ストップ、日次損失ストップ（オプション）を state 管理付きで実装。参照: `docs/design/risk_manager.md`, `docs/basic_design.md`（リスク）。 （依存: T02）
-- [ ] [T31] 判定テスト: CheckResult/State 型を使い、許可/拒否/リセットのユニットテストを追加。（依存: T30）
+- [x] [T30] 制限実装: 同時ポジ=1、クールダウン、連敗ストップ、日次損失ストップ（オプション）を state 管理付きで実装。参照: `docs/design/risk_manager.md`, `docs/basic_design.md`（リスク）。 （依存: T02）
+- [x] [T31] 判定テスト: CheckResult/State 型を使い、許可/拒否/リセットのユニットテストを追加。（依存: T30）
 
 ## infra スタブ
 

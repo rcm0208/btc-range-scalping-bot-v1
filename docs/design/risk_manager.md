@@ -4,19 +4,32 @@
 - 戦略ロジックとは独立に取引制限を判定し、エントリー/クローズ可否を返す。
 - ポジション状態、連敗数、日次損失などのステートを管理。
 
-## 入出力I/F（案）
-- `can_enter(now: datetime, side: str, pnl_stats: PnlStats) -> CheckResult`
-- `on_close(now: datetime, pnl: float, is_win: bool) -> None`
+## 入出力I/F（実装版）
+- `can_enter(now: datetime, pnl_stats: PnlStats) -> CheckResult`
+  - 注: `side`引数は現在の要件（同時1ポジションのみ）では不要なため省略
+  - 将来的にロング/ショート別の制限を追加する場合は`side: Optional[str] = None`として拡張可能
+- `on_enter() -> None`（エントリー確定時に保有ポジション数をインクリメント）
+- `on_close(now: datetime, pnl_pct: float, is_win: bool) -> None`
 - `reset_daily(now: datetime) -> None`（日次境界でリセット）
-- 状態アクセサ: `current_state()` で連敗数、クールダウン残り、日次損失などを返す。
+- 状態アクセサ: `current_state() -> RiskState` で連敗数、クールダウン残り、日次損失などを返す。
 
-### CheckResult（例）
+### CheckResult型定義
+```python
+class CheckResult(TypedDict):
+    allowed: bool
+    reason: Optional[str]
 ```
-CheckResult = {
-  "allowed": bool,
-  "reason": Optional[str],  # 拒否時の理由（cooldown, losing_streak, daily_loss, already_open）
-}
-```
+
+**型の契約**:
+- `CheckResult`は常に`allowed`と`reason`の両キーを含む（`total=True`）
+- `reason`は以下のルールに従う:
+  - `allowed=True`の場合: `reason=None`
+  - `allowed=False`の場合: `reason`は拒否理由の文字列
+    - `"already_open"`: 既にポジション保有中
+    - `"cooldown"`: クールダウン期間中
+    - `"losing_streak"`: 連続損切り回数の上限到達
+    - `"daily_loss"`: 日次損失制限到達
+- この型定義により、呼び出し側は常に両キーが存在することを前提にでき、型安全性が向上する
 
 ### PnlStats（例）
 ```
