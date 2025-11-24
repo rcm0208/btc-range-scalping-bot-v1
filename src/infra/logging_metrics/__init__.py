@@ -89,7 +89,7 @@ def get_json_logger(name: str, env: str, level: int = logging.INFO) -> logging.L
         handler = logging.StreamHandler()
         handler.setFormatter(JsonFormatter())
         logger.addHandler(handler)
-        logger.propagate = False
+    logger.propagate = False
     adapter: logging.LoggerAdapter = _EnvLoggerAdapter(logger, {"env": env})  # type: ignore[assignment]
     return adapter
 
