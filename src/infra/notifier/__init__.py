@@ -20,7 +20,10 @@ class MissingWebhookError(ValueError):
 def _should_give_up(exc: Exception) -> bool:
     """バックオフを諦める条件(主に4xxクライアントエラー)。"""
     if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code < 500
+        status = exc.response.status_code
+        if status in (408, 429):
+            return False
+        return status < 500
     return False
 
 

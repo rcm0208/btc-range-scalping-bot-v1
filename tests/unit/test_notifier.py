@@ -6,7 +6,7 @@ import json
 import httpx
 import pytest
 
-from src.infra.notifier import MissingWebhookError, Notifier
+from src.infra.notifier import MissingWebhookError, Notifier, _should_give_up
 
 
 def test_missing_webhook_is_rejected() -> None:
@@ -62,6 +62,17 @@ def test_notify_gives_up_on_client_error() -> None:
             notifier.notify({"event": "test"})
         notifier.close()
         assert mocked_post.call_count == 1  # 4xxはリトライしない
+
+
+def test_should_give_up_allows_rate_limit_retry() -> None:
+    dummy_request = httpx.Request("POST", "https://example.com/hook")
+    rate_limited = httpx.Response(429, request=dummy_request)
+    timeout_resp = httpx.Response(408, request=dummy_request)
+    client_error = httpx.Response(400, request=dummy_request)
+
+    for resp, expected in ((rate_limited, False), (timeout_resp, False), (client_error, True)):
+        exc = httpx.HTTPStatusError("error", request=dummy_request, response=resp)
+        assert _should_give_up(exc) is expected
 
 
 def test_notifier_context_manager_closes_client() -> None:
