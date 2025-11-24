@@ -32,6 +32,18 @@ def test_prepare_order_rejects_off_tick_price() -> None:
         client.prepare_order_payload(side="sell", price=100.1, size=0.001)
 
 
+def test_tick_multiple_enforced_for_non_power_of_ten() -> None:
+    spec = AssetSpec(tick_size=0.25, sz_decimals=5)
+    client = BrokerClient(api_base="https://api.example.com", private_key="0xabc", asset_spec=spec)
+
+    # on tick
+    client.prepare_order_payload(side="buy", price=100.25, size=0.1)
+
+    # off tick should fail
+    with pytest.raises(ValueError):
+        client.prepare_order_payload(side="buy", price=100.125, size=0.1)
+
+
 def test_prepare_order_rejects_excess_precision() -> None:
     spec = AssetSpec(tick_size=0.1, sz_decimals=3)
     client = BrokerClient(api_base="https://api.example.com", private_key="0xabc", asset_spec=spec)

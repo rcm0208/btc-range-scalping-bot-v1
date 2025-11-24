@@ -109,10 +109,12 @@ class BrokerClient:
 
         tick = Decimal(str(self.asset_spec.tick_size))
         px = Decimal(str(price))
-        quantized_px = px.quantize(tick, rounding=ROUND_HALF_UP)
+        remainder = px % tick
         tolerance = Decimal("1e-10")
-        if abs(px - quantized_px) > tolerance:
+        if remainder > tolerance and (tick - remainder) > tolerance:
             raise ValueError("price is not aligned to tick size")
+
+        quantized_px = px.quantize(tick, rounding=ROUND_HALF_UP)
 
         allowed_decimals = max(0, self.asset_spec.max_price_decimals)
         if self._count_decimals(quantized_px) > allowed_decimals:
