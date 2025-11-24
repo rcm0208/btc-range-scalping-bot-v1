@@ -14,6 +14,13 @@ class MissingWebhookError(ValueError):
     """Webhook URL が未設定の場合の例外。"""
 
 
+def _should_give_up(exc: Exception) -> bool:
+    """バックオフを諦める条件（主に4xxクライアントエラー）。"""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code < 500
+    return False
+
+
 class Notifier:
     """Slack Webhook 送信の簡易ラッパー。"""
 
@@ -24,7 +31,23 @@ class Notifier:
         self.environment = environment
         self.client = httpx.Client(timeout=5.0)
 
-    @backoff.on_exception(backoff.expo, httpx.HTTPError, max_tries=3, jitter=None)
+    def __enter__(self) -> "Notifier":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:  # type: ignore[override]
+        self.close()
+
+    def close(self) -> None:
+        """Explicitly close the underlying HTTP client."""
+        self.client.close()
+
+    @backoff.on_exception(
+        backoff.expo,
+        httpx.HTTPError,
+        max_tries=3,
+        jitter=None,
+        giveup=_should_give_up,
+    )
     def notify(self, event: Mapping[str, Any]) -> None:
         """環境ラベルを付与してSlackへ送信する。"""
         payload = {**event, "env": self.environment}
@@ -34,15 +57,16 @@ class Notifier:
                 headers={"Content-Type": "application/json"},
                 content=json.dumps(payload),
             )
-            if response.status_code >= 400:
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            if isinstance(exc, httpx.HTTPStatusError):
                 logger.warning(
                     "Slack notification failed (status=%s, body=%s)",
-                    response.status_code,
-                    response.text,
+                    exc.response.status_code,
+                    exc.response.text,
                 )
-                response.raise_for_status()
-        except httpx.HTTPError as exc:
-            logger.warning("Slack notification failed with network error: %s", exc)
+            else:
+                logger.warning("Slack notification failed with network error: %s", exc)
             raise
 
 

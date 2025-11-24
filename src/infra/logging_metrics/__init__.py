@@ -70,7 +70,7 @@ class _EnvLoggerAdapter(logging.LoggerAdapter):  # type: ignore[misc]
         return msg, new_kwargs
 
 
-def get_json_logger(name: str, env: str, level: int = logging.INFO) -> logging.Logger:
+def get_json_logger(name: str, env: str, level: int = logging.INFO) -> logging.LoggerAdapter:
     """Create or get a logger configured with JSON formatter and env label."""
     logger = logging.getLogger(name)
     logger.setLevel(level)
@@ -79,7 +79,7 @@ def get_json_logger(name: str, env: str, level: int = logging.INFO) -> logging.L
         handler.setFormatter(JsonFormatter())
         logger.addHandler(handler)
     logger.propagate = False
-    adapter: logging.Logger = _EnvLoggerAdapter(logger, {"env": env})  # type: ignore[assignment]
+    adapter: logging.LoggerAdapter = _EnvLoggerAdapter(logger, {"env": env})  # type: ignore[assignment]
     return adapter
 
 
@@ -127,4 +127,4 @@ class MetricsRecorder:
         return self.wins / self.trades
 
 
-__all__ = ["JsonFormatter", "get_json_logger", "MetricsRecorder"]
+__all__ = ["JsonFormatter", "MetricsRecorder", "get_json_logger"]

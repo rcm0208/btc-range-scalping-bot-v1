@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from unittest import mock
+import json
 
 import httpx
 import pytest
@@ -19,12 +20,15 @@ def test_notify_success_posts_payload() -> None:
     with mock.patch.object(httpx.Client, "post", return_value=response) as mocked_post:
         notifier = Notifier("https://example.com/hook", "bt")
         notifier.notify({"event": "test", "message": "ok"})
+        notifier.close()
 
         mocked_post.assert_called_once()
         called_args, called_kwargs = mocked_post.call_args
         assert called_args[0] == "https://example.com/hook"
-        # content is bytes; ensure envが付与される
-        assert "\"env\": \"bt\"" in called_kwargs["content"]
+        payload = json.loads(called_kwargs["content"])
+        assert payload["env"] == "bt"
+        assert payload["event"] == "test"
+        assert payload["message"] == "ok"
 
 
 def test_env_label_cannot_be_overridden() -> None:
@@ -33,6 +37,7 @@ def test_env_label_cannot_be_overridden() -> None:
     with mock.patch.object(httpx.Client, "post", return_value=response) as mocked_post:
         notifier = Notifier("https://example.com/hook", "bt")
         notifier.notify({"event": "test", "env": "fake"})
+        notifier.close()
 
         called_kwargs = mocked_post.call_args.kwargs
         assert "\"env\": \"bt\"" in called_kwargs["content"]
@@ -45,3 +50,26 @@ def test_notify_raises_on_http_error() -> None:
         notifier = Notifier("https://example.com/hook", "bt")
         with pytest.raises(httpx.HTTPStatusError):
             notifier.notify({"event": "test"})
+        notifier.close()
+
+
+def test_notify_gives_up_on_client_error() -> None:
+    dummy_request = httpx.Request("POST", "https://example.com/hook")
+    error_response = httpx.Response(400, text="bad", request=dummy_request)
+    with mock.patch.object(httpx.Client, "post", return_value=error_response) as mocked_post:
+        notifier = Notifier("https://example.com/hook", "bt")
+        with pytest.raises(httpx.HTTPStatusError):
+            notifier.notify({"event": "test"})
+        notifier.close()
+        assert mocked_post.call_count == 1  # 4xxはリトライしない
+
+
+def test_notifier_context_manager_closes_client() -> None:
+    dummy_request = httpx.Request("POST", "https://example.com/hook")
+    response = httpx.Response(200, request=dummy_request)
+    with mock.patch.object(httpx.Client, "post", return_value=response), mock.patch.object(
+        httpx.Client, "close"
+    ) as mocked_close:
+        with Notifier("https://example.com/hook", "bt") as notifier:
+            notifier.notify({"event": "ctx"})
+        mocked_close.assert_called_once()
