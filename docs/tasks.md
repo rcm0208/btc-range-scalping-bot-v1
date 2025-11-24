@@ -35,7 +35,7 @@
 
 ## infra スタブ
 
-- [ ] [T40] data_provider: Parquet 読み出しイテレータ雛形、WS 購読 I/F 定義、欠損バー警告ログ枠を用意。参照: `docs/design/data_provider.md`, `docs/hyperliquid/hyperliquid_websocket.md`。（依存: T02）
+- [x] [T40] data_provider: Parquet 読み出しイテレータ雛形、WS 購読 I/F 定義、欠損バー警告ログ枠を用意。参照: `docs/design/data_provider.md`, `docs/hyperliquid/hyperliquid_websocket.md`。（依存: T02）
 - [ ] [T41] broker_client: SDK 署名呼び出し枠、tick/lot/MinTradeNtl バリデーション枠、httpx クライアント初期化のみ。参照: `docs/design/broker_client.md`, `docs/hyperliquid/*`（tick/lot/署名/エラー/レート）。 （依存: T01）
 - [ ] [T42] notifier: Slack webhook 送信関数（少回リトライ）、env ラベル付き payload を作成。参照: `docs/design/notifier.md`。（依存: T01）
 - [ ] [T43] logging_metrics: JSON Lines ロガー初期化と標準キー固定、メトリクス集計の器だけ置く。参照: `docs/design/logging_metrics.md`。（依存: T01）
