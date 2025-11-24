@@ -12,18 +12,8 @@ _STD_KEYS = ("timestamp", "level", "module", "event", "env", "message")
 class JsonFormatter(logging.Formatter):
     """JSON Lines formatter with fixed standard keys."""
 
-    def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
-        payload: Dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
-            "level": record.levelname,
-            "module": record.name,
-            "event": getattr(record, "event", None) or record.getMessage(),
-            "env": getattr(record, "env", None),
-            "message": record.getMessage(),
-        }
-        if record.exc_info:
-            payload["exc_info"] = self.formatException(record.exc_info)
-        skip_keys = {
+    _SKIP_KEYS = frozenset(
+        {
             "args",
             "msg",
             "name",
@@ -43,15 +33,27 @@ class JsonFormatter(logging.Formatter):
             "thread",
             "threadName",
         }
+    )
+
+    def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
+        payload: Dict[str, Any] = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "level": record.levelname,
+            "module": record.name,
+            "event": getattr(record, "event", None) or record.getMessage(),
+            "env": getattr(record, "env", None),
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
         for key, value in record.__dict__.items():
             if key.startswith("_"):
                 continue
-            if key in _STD_KEYS or key in skip_keys:
+            if key in _STD_KEYS or key in self._SKIP_KEYS:
                 continue
-            try:
-                json.dumps(value)
+            if isinstance(value, (str, int, float, bool, type(None), list, dict)):
                 payload[key] = value
-            except TypeError:
+            else:
                 payload[key] = str(value)
         return json.dumps(payload, ensure_ascii=True)
 
