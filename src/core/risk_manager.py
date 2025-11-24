@@ -10,7 +10,7 @@ from src.utils import CheckResult, PnlStats
 @dataclass
 class RiskParams:
     """リスク制限に関するパラメータセット。
-    
+
     Attributes:
         max_open_positions: 同時保有可能なポジション数の上限（通常は1）
         cooldown_minutes: ポジションクローズ後の新規エントリー禁止期間（分）
@@ -29,7 +29,7 @@ class RiskParams:
 @dataclass
 class RiskState:
     """現在のリスク状態を保持する。
-    
+
     Attributes:
         open_positions: 現在保有中のポジション数
         losing_streak: 連続損切り回数（勝ちトレードでリセット）
@@ -47,17 +47,17 @@ class RiskState:
 
 class RiskManager:
     """同時ポジション・クールダウン・連敗/日次損失ストップを判定する。
-    
+
     リスク管理の中核となるクラス。エントリー可否の判定、ポジション状態の追跡、
     各種制限ルールの適用を行う。
-    
+
     主な機能:
         - 同時ポジション数の制限
         - クローズ後のクールダウン期間の管理
         - 連続損切り回数による自動停止
         - 日次損失制限による自動停止
         - 外部損益情報との状態同期
-    
+
     Attributes:
         params: リスク制限パラメータ
         state: 現在のリスク状態
@@ -65,7 +65,7 @@ class RiskManager:
 
     def __init__(self, params: RiskParams) -> None:
         """RiskManagerを初期化する。
-        
+
         Args:
             params: リスク制限パラメータ
         """
@@ -74,21 +74,21 @@ class RiskManager:
 
     def can_enter(self, now: datetime, pnl_stats: PnlStats) -> CheckResult:
         """エントリー可否を判定する。
-        
+
         外部から渡された損益情報で内部状態を同期した後、各種制限ルールを
         順次評価してエントリーの可否を判定する。
-        
+
         判定順序:
             1. 停止フラグ（stopped_reason）のチェック
             2. 同時ポジション数の上限チェック
             3. クールダウン期間のチェック
             4. 連続損切り回数のチェック
             5. 日次損失制限のチェック
-        
+
         Args:
             now: 現在時刻（UTC）
             pnl_stats: 外部から渡される損益・状態情報
-        
+
         Returns:
             CheckResult: エントリー可否の判定結果
                 - allowed=True, reason=None: エントリー可能
@@ -96,7 +96,7 @@ class RiskManager:
                 - allowed=False, reason="cooldown": クールダウン期間中
                 - allowed=False, reason="losing_streak": 連続損切り回数の上限到達
                 - allowed=False, reason="daily_loss": 日次損失制限到達
-        
+
         Note:
             このメソッドは内部状態を変更する可能性がある（stopped_reasonの設定）。
         """
@@ -126,19 +126,19 @@ class RiskManager:
 
     def on_close(self, now: datetime, pnl_pct: float, is_win: bool) -> None:
         """ポジションクローズ時に状態を更新する。
-        
+
         ポジションがクローズされた際に呼び出され、以下の状態を更新する:
             - 最終クローズ時刻（クールダウン計算用）
             - 保有ポジション数（デクリメント）
             - 日次累積損益率
             - 連続損切り回数（勝ちでリセット、負けでインクリメント）
             - 停止フラグ（連続損切りまたは日次損失の閾値到達時）
-        
+
         Args:
             now: クローズ時刻（UTC）
             pnl_pct: 実現損益率（%。例: 0.003 = +0.3%, -0.002 = -0.2%）
             is_win: 勝ちトレードかどうか（True: 勝ち、False: 負け）
-        
+
         Note:
             open_positionsが0の場合でもmax(0, ...)で保護されているため、
             負の値にはならない。
@@ -162,10 +162,10 @@ class RiskManager:
 
     def on_enter(self) -> None:
         """エントリー確定時に保有ポジション数をインクリメントする。
-        
+
         can_enterでエントリーが許可された後、実際にポジションを建てた際に
         呼び出される。同時ポジション数の追跡に使用される。
-        
+
         Note:
             このメソッドはcan_enterの判定後に呼び出されることを想定しているため、
             追加の検証は行わない。
@@ -174,16 +174,16 @@ class RiskManager:
 
     def reset_daily(self, now: datetime) -> None:
         """日次境界で状態をリセットする。
-        
+
         日付が変わった際に呼び出され、以下の状態をリセットする:
             - 連続損切り回数
             - 日次累積損益率
             - 停止フラグ
-        
+
         Args:
             now: リセット時刻（UTC）。現在は使用していないが、将来的に
                  日次境界の自動判定に使用する可能性があるため保持。
-        
+
         Note:
             last_close_timeはクールダウン計算に使用するためリセットしない。
         """
@@ -195,10 +195,10 @@ class RiskManager:
 
     def current_state(self) -> RiskState:
         """現在の状態のコピーを返す。
-        
+
         内部状態を外部に公開する際に使用する。コピーを返すため、
         返された状態を変更しても内部状態には影響しない。
-        
+
         Returns:
             RiskState: 現在の状態のコピー
         """
@@ -212,23 +212,23 @@ class RiskManager:
 
     def _sync_state_from_pnl(self, pnl_stats: PnlStats) -> None:
         """外部から渡された損益情報で内部状態を同期する。
-        
+
         外部システム（backtesterやrunner）から渡される損益情報を使って
         内部状態を更新する。これにより、複数のコンポーネント間で状態の
         整合性を保つことができる。
-        
+
         同期ルール:
             - open_positions: 内部カウントと外部カウントの大きい方を採用
             - losing_streak: 外部情報を優先（最新集計を想定）
             - daily_realized_pct: 外部情報を優先
             - last_close_time: より新しい時刻を採用
-        
+
         Args:
             pnl_stats: 外部から渡される損益・状態情報
         """
         # open_positions は内部カウントを下回らないようにマージする
         self.state.open_positions = max(self.state.open_positions, pnl_stats["open_positions"])
-        # losing_streak/daily_realized_pct は外部情報を優先（最新集計を想定）
+        # losing_streak/daily_realized_pct は外部情報を優先(最新集計を想定)
         self.state.losing_streak = pnl_stats["losing_streak"]
         self.state.daily_realized_pct = pnl_stats["daily_realized_pct"]
 
@@ -242,13 +242,13 @@ class RiskManager:
 
     def _in_cooldown(self, now: datetime) -> bool:
         """現在がクールダウン期間中かを判定する。
-        
+
         最後のポジションクローズ時刻から指定された分数が経過していない場合、
         クールダウン期間中と判定する。
-        
+
         Args:
             now: 現在時刻（UTC）
-        
+
         Returns:
             bool: クールダウン期間中の場合True、それ以外はFalse
         """
