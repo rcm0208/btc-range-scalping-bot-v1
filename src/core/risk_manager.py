@@ -226,13 +226,15 @@ class RiskManager:
         Args:
             pnl_stats: 外部から渡される損益・状態情報
         """
-        external_open = pnl_stats["open_positions"]
+        external_open_raw = pnl_stats["open_positions"]
+        external_open = external_open_raw if external_open_raw >= 0 else 0
         if self.state.open_positions != external_open and self.state.open_positions > 0:
             # TODO: 不整合をログに記録する（現状は外部値を正とする）
             pass
         self.state.open_positions = external_open
         # losing_streak/daily_realized_pct は外部情報を優先(最新集計を想定)
-        self.state.losing_streak = pnl_stats["losing_streak"]
+        external_losing = pnl_stats["losing_streak"]
+        self.state.losing_streak = external_losing if external_losing >= 0 else 0
         self.state.daily_realized_pct = pnl_stats["daily_realized_pct"]
 
         external_last_close = pnl_stats["last_close_time"]

@@ -194,3 +194,21 @@ def test_sync_state_prefers_external_open_positions() -> None:
         )
     )
     assert manager.state.open_positions == 0
+
+
+def test_sync_state_clamps_negative_values() -> None:
+    manager = RiskManager(make_params())
+    now = datetime(2025, 1, 1, 12, 0, 0)
+
+    manager._sync_state_from_pnl(
+        make_stats(
+            open_positions=-3,
+            losing_streak=-2,
+            daily_realized_pct=-0.05,
+            last_close_time=now,
+        )
+    )
+
+    assert manager.state.open_positions == 0
+    assert manager.state.losing_streak == 0
+    assert manager.state.daily_realized_pct == -0.05
