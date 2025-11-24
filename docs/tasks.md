@@ -35,15 +35,17 @@
 
 ## infra スタブ
 
-- [ ] [T40] data_provider: Parquet 読み出しイテレータ雛形、WS 購読 I/F 定義、欠損バー警告ログ枠を用意。参照: `docs/design/data_provider.md`, `docs/hyperliquid/hyperliquid_websocket.md`。（依存: T02）
-- [ ] [T41] broker_client: SDK 署名呼び出し枠、tick/lot/MinTradeNtl バリデーション枠、httpx クライアント初期化のみ。参照: `docs/design/broker_client.md`, `docs/hyperliquid/*`（tick/lot/署名/エラー/レート）。 （依存: T01）
-- [ ] [T42] notifier: Slack webhook 送信関数（少回リトライ）、env ラベル付き payload を作成。参照: `docs/design/notifier.md`。（依存: T01）
-- [ ] [T43] logging_metrics: JSON Lines ロガー初期化と標準キー固定、メトリクス集計の器だけ置く。参照: `docs/design/logging_metrics.md`。（依存: T01）
+- [x] [T40] data_provider: Parquet 読み出しイテレータ雛形、WS 購読 I/F 定義、欠損バー警告ログ枠を用意。参照: `docs/design/data_provider.md`, `docs/hyperliquid/hyperliquid_websocket.md`。（依存: T02）
+- [x] [T41] broker_client: SDK 署名呼び出し枠、tick/lot/MinTradeNtl バリデーション枠、httpx クライアント初期化のみ。参照: `docs/design/broker_client.md`, `docs/hyperliquid/*`（tick/lot/署名/エラー/レート）。 （依存: T01）
+- [x] [T42] notifier: Slack webhook 送信関数（少回リトライ）、env ラベル付き payload を作成。参照: `docs/design/notifier.md`。（依存: T01）
+- [x] [T43] logging_metrics: JSON Lines ロガー初期化と標準キー固定、メトリクス集計の器だけ置く。参照: `docs/design/logging_metrics.md`。（依存: T01）
 
 ## backtester
 
 - [ ] [T50] リプレイ実装: 1m/15m リプレイと約定モデル（OHLC 内 fill、固定 bps 手数料/スリッページ）を実装。参照: `docs/design/backtester.md`。（依存: T21, T31, T40）
 - [ ] [T51] 集計: 勝率/PF/DD/平均保持時間のメトリクス集計と簡易サマリ出力を行う。（依存: T50）
+- [ ] [T52] BT実行: 複数期間（例: 3ヶ月/6ヶ月/1年）でバックテストを実行し、勝率・PF・最大DD・平均保持時間・手数料影響を取得。結果を JSON または簡易レポートで残す。実行区間・手数料/スリッページ設定・現行パラメータも併記し、後続のレビュー材料にする。（依存: T51, T70）
+- [ ] [T53] パラメータ調整: VWAP乖離/RSI/TP/SL/時間切れなど要件の調整可能項目を複数セット試し、指標が最良の候補を記録。必要なら `config/strategy.yaml` に反映案を準備し、BT結果の共有・レビュー（Codexへ共有してすり合わせ）を前提にする。（依存: T52）
 
 ## runner
 
