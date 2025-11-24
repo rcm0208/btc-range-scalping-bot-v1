@@ -218,7 +218,7 @@ class RiskManager:
         整合性を保つことができる。
 
         同期ルール:
-            - open_positions: 内部カウントと外部カウントの大きい方を採用
+            - open_positions: 外部の正準情報を優先（不整合は将来ログ化を検討）
             - losing_streak: 外部情報を優先（最新集計を想定）
             - daily_realized_pct: 外部情報を優先
             - last_close_time: より新しい時刻を採用
@@ -226,8 +226,11 @@ class RiskManager:
         Args:
             pnl_stats: 外部から渡される損益・状態情報
         """
-        # open_positions は内部カウントを下回らないようにマージする
-        self.state.open_positions = max(self.state.open_positions, pnl_stats["open_positions"])
+        external_open = pnl_stats["open_positions"]
+        if self.state.open_positions != external_open and self.state.open_positions > 0:
+            # TODO: 不整合をログに記録する（現状は外部値を正とする）
+            pass
+        self.state.open_positions = external_open
         # losing_streak/daily_realized_pct は外部情報を優先(最新集計を想定)
         self.state.losing_streak = pnl_stats["losing_streak"]
         self.state.daily_realized_pct = pnl_stats["daily_realized_pct"]

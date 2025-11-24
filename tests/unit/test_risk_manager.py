@@ -169,6 +169,28 @@ def test_on_enter_increments_and_blocks_additional_entries() -> None:
     assert allowed_first["allowed"] is True
 
     manager.on_enter()
-    blocked = manager.can_enter(now, make_stats())
+    # 外部状態が正とみなされるため、直近の内部状態を渡す
+    blocked = manager.can_enter(
+        now,
+        make_stats(open_positions=manager.state.open_positions),
+    )
     assert blocked["allowed"] is False
     assert blocked["reason"] == "already_open"
+
+
+def test_sync_state_prefers_external_open_positions() -> None:
+    manager = RiskManager(make_params(max_open_positions=1))
+    now = datetime(2025, 1, 1, 12, 0, 0)
+    manager.on_enter()
+    assert manager.state.open_positions == 1
+
+    # 外部情報で0件と通知された場合、内部カウントより少なくても外部を優先
+    manager._sync_state_from_pnl(
+        make_stats(
+            open_positions=0,
+            losing_streak=0,
+            daily_realized_pct=0.0,
+            last_close_time=now,
+        )
+    )
+    assert manager.state.open_positions == 0
