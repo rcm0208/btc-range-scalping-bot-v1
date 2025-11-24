@@ -82,7 +82,8 @@ class RiskManager:
             self.state.stopped_reason = self.state.stopped_reason or "daily_loss"
 
     def reset_daily(self, now: datetime) -> None:
-        """日次境界で状態をリセットする。"""
+        """日次境界で状態をリセットする。now は I/F 整合性のために受け取り、将来の境界判定用に予約。"""
+        _ = now  # lint 回避・将来利用のため保持
         self.state.losing_streak = 0
         self.state.daily_realized_pct = 0.0
         self.state.stopped_reason = None
