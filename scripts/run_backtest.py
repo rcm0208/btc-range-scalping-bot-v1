@@ -32,6 +32,8 @@ def parse_dt(value: str) -> datetime:
     dt = datetime.fromisoformat(value)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
+    elif dt.tzinfo != timezone.utc:
+        raise ValueError(f"datetime must be UTC, got {dt.tzinfo}")
     return dt
 
 
@@ -49,6 +51,12 @@ def run_backtest_from_configs(
     env_cfg = load_yaml(env_path)
     strat_cfg = load_yaml(strategy_path)
     risk_cfg = load_yaml(risk_path)
+
+    _validate_required(env_cfg, ["data_paths", "taker_fee_pct"])
+    _validate_required(env_cfg.get("data_paths", {}), ["ohlcv_1m", "ohlcv_15m"])
+    _validate_required(strat_cfg, ["vwap_deviation_pct_long", "vwap_deviation_pct_short", "rsi_long_max", "rsi_short_min", "tp_pct", "sl_pct", "timeout_minutes", "regime"])
+    _validate_required(risk_cfg, ["max_open_positions", "cooldown_minutes", "max_consecutive_losses", "use_daily_loss_limit", "daily_loss_limit_pct"])
+    _validate_required(strat_cfg.get("regime", {}), ["adx_max", "bb_width_pct_max", "ema_flatness_threshold", "ema_spread_pct_max"])
 
     data_paths = env_cfg.get("data_paths") or {}
     provider = DataProvider(
@@ -127,12 +135,17 @@ def main() -> None:
     parser.add_argument("--base-equity", type=float, default=1.0)
     args = parser.parse_args()
 
+    start_dt = parse_dt(args.start)
+    end_dt = parse_dt(args.end)
+    if start_dt >= end_dt:
+        parser.error("--start must be earlier than --end")
+
     run_backtest_from_configs(
         env_path=Path(args.env_path),
         strategy_path=Path(args.strategy_path),
         risk_path=Path(args.risk_path),
-        start=parse_dt(args.start),
-        end=parse_dt(args.end),
+        start=start_dt,
+        end=end_dt,
         output_path=Path(args.output),
         position_size=float(args.position_size),
         base_equity=float(args.base_equity),
@@ -141,3 +154,9 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def _validate_required(cfg: Dict[str, Any], required_keys: list[str]) -> None:
+    missing = [k for k in required_keys if k not in cfg or cfg[k] in (None, "")]
+    if missing:
+        raise ValueError(f"Missing required config keys: {missing}")

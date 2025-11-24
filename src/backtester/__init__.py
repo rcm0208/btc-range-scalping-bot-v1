@@ -7,13 +7,13 @@ from typing import Iterator, Optional, Protocol, Sequence, cast
 from src.core.indicator_engine import IndicatorEngine
 from src.core.risk_manager import RiskManager
 from src.core.strategy_core import StrategyCore
-from src.utils import Bar, Indicators, OpenPosition, PnlStats, Side, Signal
+from src.utils import Bar, Indicators, OpenPosition, PnlStats, Side, Signal, Timeframe
 
 
 class DataProviderProtocol(Protocol):
     """Partial protocol for DataProvider / test doubles."""
 
-    def load_ohlcv(self, timeframe: str, start: datetime, end: datetime) -> Iterator[Bar]:
+    def load_ohlcv(self, timeframe: Timeframe, start: datetime, end: datetime) -> Iterator[Bar]:
         ...
 
 
