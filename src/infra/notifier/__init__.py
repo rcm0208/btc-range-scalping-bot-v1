@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping
 
 import backoff
 import httpx
@@ -15,7 +15,7 @@ class MissingWebhookError(ValueError):
 
 
 def _should_give_up(exc: Exception) -> bool:
-    """バックオフを諦める条件（主に4xxクライアントエラー）。"""
+    """バックオフを諦める条件(主に4xxクライアントエラー)。"""
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code < 500
     return False
@@ -34,7 +34,12 @@ class Notifier:
     def __enter__(self) -> "Notifier":
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:  # type: ignore[override]
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: object,
+    ) -> None:
         self.close()
 
     def close(self) -> None:
@@ -70,4 +75,4 @@ class Notifier:
             raise
 
 
-__all__ = ["Notifier", "MissingWebhookError"]
+__all__ = ["MissingWebhookError", "Notifier"]

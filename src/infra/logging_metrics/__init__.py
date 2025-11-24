@@ -21,6 +21,8 @@ class JsonFormatter(logging.Formatter):
             "env": getattr(record, "env", None),
             "message": record.getMessage(),
         }
+        if record.exc_info:
+            payload["exc_info"] = self.formatException(record.exc_info)
         skip_keys = {
             "args",
             "msg",
@@ -62,8 +64,8 @@ class _EnvLoggerAdapter(logging.LoggerAdapter):  # type: ignore[misc]
         if self.extra:
             merged.update(self.extra)
         extra = kwargs.get("extra")
-        if extra:
-            merged.update(extra)  # type: ignore[arg-type]
+        if isinstance(extra, Mapping):
+            merged.update(extra)
         merged.setdefault("event", msg)
         new_kwargs: Dict[str, Any] = dict(kwargs)
         new_kwargs["extra"] = merged
@@ -71,10 +73,11 @@ class _EnvLoggerAdapter(logging.LoggerAdapter):  # type: ignore[misc]
 
 
 def get_json_logger(name: str, env: str, level: int = logging.INFO) -> logging.LoggerAdapter:
-    """Create or get a logger configured with JSON formatter and env label."""
+    """Create or get a LoggerAdapter configured with JSON formatter and env label."""
     logger = logging.getLogger(name)
     logger.setLevel(level)
-    if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
+    has_json_handler = any(isinstance(h.formatter, JsonFormatter) for h in logger.handlers if isinstance(h, logging.StreamHandler))
+    if not has_json_handler:
         handler = logging.StreamHandler()
         handler.setFormatter(JsonFormatter())
         logger.addHandler(handler)
