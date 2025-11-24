@@ -45,6 +45,23 @@ class BacktestResult:
     equity_curve: list[tuple[int, float]]
     final_pnl_pct: float
     final_equity: float
+    base_equity: float
+    summary: "BacktestSummary"
+
+
+@dataclass
+class BacktestSummary:
+    trades: int
+    wins: int
+    losses: int
+    win_rate: Optional[float]
+    profit_factor: Optional[float]
+    max_drawdown_pct: Optional[float]
+    avg_trade_return_pct: Optional[float]
+    avg_trade_duration_s: Optional[float]
+    total_return_pct: float
+    final_equity: float
+    total_fee_pct_of_base: float
 
 
 class Backtester:
@@ -151,11 +168,14 @@ class Backtester:
             equity_curve.append((last_bar["end_ms"], realized_pct))
 
         final_pnl_pct = (equity - self.base_equity) / self.base_equity
+        summary = self._compute_summary(trades, self.base_equity)
         return BacktestResult(
             trades=trades,
             equity_curve=equity_curve,
             final_pnl_pct=final_pnl_pct,
             final_equity=equity,
+            base_equity=self.base_equity,
+            summary=summary,
         )
 
     def _advance_15m(
@@ -279,6 +299,68 @@ class Backtester:
             return price * (1 + self.slippage_bps) if is_entry else price * (1 - self.slippage_bps)
         return price * (1 - self.slippage_bps) if is_entry else price * (1 + self.slippage_bps)
 
+    def _compute_summary(self, trades: list[BacktestTrade], base_equity: float) -> "BacktestSummary":
+        if not trades:
+            return BacktestSummary(
+                trades=0,
+                wins=0,
+                losses=0,
+                win_rate=None,
+                profit_factor=None,
+                max_drawdown_pct=None,
+                avg_trade_return_pct=None,
+                avg_trade_duration_s=None,
+                total_return_pct=0.0,
+                final_equity=base_equity,
+                total_fee_pct_of_base=0.0,
+            )
+
+        wins = sum(1 for t in trades if t.net_pnl > 0)
+        losses = sum(1 for t in trades if t.net_pnl < 0)
+        win_rate = wins / len(trades) if trades else None
+
+        total_positive = sum(t.net_pnl for t in trades if t.net_pnl > 0)
+        total_negative = abs(sum(t.net_pnl for t in trades if t.net_pnl < 0))
+        profit_factor = None
+        if total_negative > 0:
+            profit_factor = total_positive / total_negative
+        elif total_positive > 0:
+            profit_factor = float("inf")
+
+        avg_trade_return_pct = sum(t.net_return_pct for t in trades) / len(trades)
+        avg_trade_duration_s = sum((t.exit_time_ms - t.entry_time_ms) for t in trades) / (
+            len(trades) * 1000
+        )
+
+        equity_points = [base_equity]
+        for t in trades:
+            equity_points.append(t.equity_after)
+        peak = equity_points[0]
+        max_dd = 0.0
+        for eq in equity_points[1:]:
+            if eq > peak:
+                peak = eq
+            drawdown = (peak - eq) / peak if peak > 0 else 0.0
+            max_dd = max(max_dd, drawdown)
+
+        total_fee = sum(t.fee_paid_pct * t.equity_before for t in trades)
+
+        total_return_pct = (equity_points[-1] - base_equity) / base_equity
+
+        return BacktestSummary(
+            trades=len(trades),
+            wins=wins,
+            losses=losses,
+            win_rate=win_rate,
+            profit_factor=profit_factor,
+            max_drawdown_pct=max_dd,
+            avg_trade_return_pct=avg_trade_return_pct,
+            avg_trade_duration_s=avg_trade_duration_s,
+            total_return_pct=total_return_pct,
+            final_equity=equity_points[-1],
+            total_fee_pct_of_base=total_fee / base_equity,
+        )
+
 
 def _ms_to_datetime(ms: int) -> datetime:
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc)
@@ -296,5 +378,6 @@ __all__ = [
     "BacktestResult",
     "BacktestTrade",
     "Backtester",
+    "BacktestSummary",
     "DataProviderProtocol",
 ]
