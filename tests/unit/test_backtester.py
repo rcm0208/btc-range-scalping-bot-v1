@@ -56,7 +56,7 @@ class StubStrategy:
         indicators_15m: Optional[Indicators] = None,
         open_position: Optional[OpenPosition] = None,
     ) -> Signal:
-        _ = indicators_1m, bar_15m, indicators_15m
+        _ = bar_1m, indicators_1m, bar_15m, indicators_15m
         if not self.enter_emitted:
             self.enter_emitted = True
             return {
@@ -154,7 +154,7 @@ def test_backtester_handles_short_trade_with_slippage() -> None:
             indicators_15m: Optional[Indicators] = None,
             open_position: Optional[OpenPosition] = None,
         ) -> Signal:
-            _ = indicators_1m, bar_15m, indicators_15m
+            _ = bar_1m, indicators_1m, bar_15m, indicators_15m
             if not self.entered:
                 self.entered = True
                 return {
@@ -269,6 +269,156 @@ def test_backtester_fees_use_exit_notional() -> None:
     assert result.final_equity == pytest.approx(1.0 + net_pnl)
 
 
+def test_backtester_clamps_tp_to_target_on_overshoot() -> None:
+    # High goes far beyond TP, fill should clamp at TP (no slippage/fees here)
+    bars_1m = [
+        _make_bar(0, close=100.0, timeframe="1m"),
+        {
+            **_make_bar(1, close=100.0, timeframe="1m"),
+            "high": 120.0,
+        },
+    ]
+    provider = StubDataProvider(bars_1m, [])
+
+    class TpStrategy:
+        entered = False
+
+        def update(
+            self,
+            bar_1m: Bar,
+            indicators_1m: Indicators,
+            bar_15m: Optional[Bar] = None,
+            indicators_15m: Optional[Indicators] = None,
+            open_position: Optional[OpenPosition] = None,
+        ) -> Signal:
+            _ = bar_1m, indicators_1m, bar_15m, indicators_15m
+            if not self.entered:
+                self.entered = True
+                return {
+                    "type": "enter",
+                    "side": "long",
+                    "reason": "enter_long",
+                    "tp_level": 105.0,
+                    "sl_level": 95.0,
+                    "timeout_ms": 60_000,
+                    "context": None,
+                }
+            return {
+                "type": "exit",
+                "side": "long",
+                "reason": "take_profit",
+                "tp_level": 105.0,
+                "sl_level": 95.0,
+                "timeout_ms": 60_000,
+                "context": {"price": 120.0},
+            }
+
+    strategy = TpStrategy()
+    risk = RiskManager(
+        RiskParams(
+            max_open_positions=1,
+            cooldown_minutes=0,
+            max_consecutive_losses=3,
+            use_daily_loss_limit=False,
+            daily_loss_limit_pct=-1.0,
+        )
+    )
+    backtester = Backtester(
+        data_provider=provider,
+        indicator_engine=IndicatorEngine(),
+        strategy=strategy,  # type: ignore[arg-type]
+        risk_manager=risk,
+        fee_rate=0.0,
+        slippage_bps=0.0,
+    )
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    end = start + timedelta(minutes=2)
+    result = backtester.run(start, end)
+
+    trade = result.trades[0]
+    expected_exit = 105.0  # clamped
+    size = 1.0 / 100.0
+    expected_gross = (expected_exit - 100.0) * size
+    assert trade.exit_price == pytest.approx(expected_exit)
+    assert trade.gross_pnl == pytest.approx(expected_gross)
+    assert trade.net_pnl == pytest.approx(expected_gross)
+
+
+def test_backtester_clamps_sl_for_short_overshoot() -> None:
+    # High overshoots SL for short; fill should clamp at SL (no slippage/fees)
+    bars_1m = [
+        _make_bar(0, close=100.0, timeframe="1m"),
+        {
+            **_make_bar(1, close=100.0, timeframe="1m"),
+            "high": 120.0,
+        },
+    ]
+    provider = StubDataProvider(bars_1m, [])
+
+    class SlStrategy:
+        entered = False
+
+        def update(
+            self,
+            bar_1m: Bar,
+            indicators_1m: Indicators,
+            bar_15m: Optional[Bar] = None,
+            indicators_15m: Optional[Indicators] = None,
+            open_position: Optional[OpenPosition] = None,
+        ) -> Signal:
+            _ = bar_1m, indicators_1m, bar_15m, indicators_15m
+            if not self.entered:
+                self.entered = True
+                return {
+                    "type": "enter",
+                    "side": "short",
+                    "reason": "enter_short",
+                    "tp_level": 95.0,
+                    "sl_level": 110.0,
+                    "timeout_ms": 60_000,
+                    "context": None,
+                }
+            return {
+                "type": "exit",
+                "side": "short",
+                "reason": "stop_loss",
+                "tp_level": 95.0,
+                "sl_level": 110.0,
+                "timeout_ms": 60_000,
+                "context": {"price": 120.0},
+            }
+
+    strategy = SlStrategy()
+    risk = RiskManager(
+        RiskParams(
+            max_open_positions=1,
+            cooldown_minutes=0,
+            max_consecutive_losses=3,
+            use_daily_loss_limit=False,
+            daily_loss_limit_pct=-1.0,
+        )
+    )
+    backtester = Backtester(
+        data_provider=provider,
+        indicator_engine=IndicatorEngine(),
+        strategy=strategy,  # type: ignore[arg-type]
+        risk_manager=risk,
+        fee_rate=0.0,
+        slippage_bps=0.0,
+    )
+    start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    end = start + timedelta(minutes=2)
+    result = backtester.run(start, end)
+
+    trade = result.trades[0]
+    expected_exit = 110.0  # clamped stop loss
+    size = 1.0 / 100.0
+    expected_gross = (100.0 - expected_exit) * size
+    assert trade.exit_price == pytest.approx(expected_exit)
+    assert trade.gross_pnl == pytest.approx(expected_gross)
+    assert trade.net_pnl == pytest.approx(expected_gross)
+
+
 def test_backtester_scales_returns_by_position_size() -> None:
     bars_1m = [_make_bar(0, close=100.0), _make_bar(1, close=110.0)]
     provider = StubDataProvider(bars_1m, [])
@@ -321,7 +471,7 @@ def test_backtester_forced_exit_end_of_data_updates_equity_curve() -> None:
             indicators_15m: Optional[Indicators] = None,
             open_position: Optional[OpenPosition] = None,
         ) -> Signal:
-            _ = indicators_1m, bar_15m, indicators_15m
+            _ = bar_1m, indicators_1m, bar_15m, indicators_15m
             if not self.entered:
                 self.entered = True
                 return {
@@ -386,7 +536,64 @@ def test_backtester_forced_exit_end_of_data_updates_equity_curve() -> None:
 def test_backtester_respects_cooldown_and_blocks_reentry() -> None:
     bars_1m = [_make_bar(0), _make_bar(1, close=101.0), _make_bar(2, close=102.0)]
     provider = StubDataProvider(bars_1m, [])
-    strategy = StubStrategy(exit_price=101.0)
+
+    class CooldownReenterStrategy:
+        entered = 0
+        exited_once = False
+
+        def update(
+            self,
+            bar_1m: Bar,
+            indicators_1m: Indicators,
+            bar_15m: Optional[Bar] = None,
+            indicators_15m: Optional[Indicators] = None,
+            open_position: Optional[OpenPosition] = None,
+        ) -> Signal:
+            _ = indicators_1m, bar_15m, indicators_15m
+            if open_position:
+                self.exited_once = True
+                return {
+                    "type": "exit",
+                    "side": "long",
+                    "reason": "take_profit",
+                    "tp_level": open_position["tp_level"],
+                    "sl_level": open_position["sl_level"],
+                    "timeout_ms": open_position["timeout_ms"],
+                    "context": {"price": float(bar_1m["close"])},
+                }
+            if self.entered == 0:
+                self.entered += 1
+                return {
+                    "type": "enter",
+                    "side": "long",
+                    "reason": "enter_long",
+                    "tp_level": 200.0,
+                    "sl_level": 50.0,
+                    "timeout_ms": 60_000,
+                    "context": None,
+                }
+            if self.exited_once and self.entered == 1:
+                self.entered += 1
+                return {
+                    "type": "enter",
+                    "side": "long",
+                    "reason": "enter_long_reentry",
+                    "tp_level": 200.0,
+                    "sl_level": 50.0,
+                    "timeout_ms": 60_000,
+                    "context": None,
+                }
+            return {
+                "type": "hold",
+                "side": None,
+                "reason": "noop",
+                "tp_level": None,
+                "sl_level": None,
+                "timeout_ms": None,
+                "context": None,
+            }
+
+    strategy = CooldownReenterStrategy()
     risk = RiskManager(
         RiskParams(
             max_open_positions=1,
@@ -411,6 +618,7 @@ def test_backtester_respects_cooldown_and_blocks_reentry() -> None:
 
     assert len(result.trades) == 1
     assert risk.state.open_positions == 0
+    assert strategy.entered == 2  # 2回目のエントリーシグナルは出たがブロックされた
     # 再エントリーシグナルは cooldown 中に拒否されるため trades は増えない
     assert result.trades[0].exit_time_ms == bars_1m[1]["end_ms"]
 

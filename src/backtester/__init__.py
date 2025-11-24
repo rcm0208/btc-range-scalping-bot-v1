@@ -147,6 +147,7 @@ class Backtester:
             equity = trade.equity_after
             self.risk_manager.on_close(last_dt, trade.net_return_pct, trade.net_return_pct > 0)
             realized_pct = (equity - self.base_equity) / self.base_equity
+            # Note: equity_curve already has a point for last_bar; we append again to reflect forced exit.
             equity_curve.append((last_bar["end_ms"], realized_pct))
 
         final_pnl_pct = (equity - self.base_equity) / self.base_equity
@@ -210,6 +211,7 @@ class Backtester:
         exit_fee = exit_notional * self.fee_rate
         total_fee = entry_fee + exit_fee
         total_fee_pct = total_fee / open_position.equity_before
+        # Slippage approximation: symmetric bps scaled by position_size (not exact realized slippage).
         slippage_cost_pct = self.slippage_bps * 2 * self.position_size
         net_pnl = gross_pnl - total_fee
         net_return_pct = net_pnl / open_position.equity_before
@@ -235,21 +237,33 @@ class Backtester:
         )
 
     def _resolve_exit_price(
-        self, bar: Bar, signal: Signal, open_position: OpenPosition
+        self, bar: Bar, signal: Signal, _open_position: OpenPosition
     ) -> float:
         context = signal.get("context") or {}
         hit_price = None
         if isinstance(context, dict):
             hit_price = context.get("price") or context.get("bar_close")
 
-        if isinstance(hit_price, (float, int)):
-            return float(hit_price)
+        price = float(hit_price) if isinstance(hit_price, (float, int)) else float(bar["close"])
+        side = _open_position["side"]
+        tp_level = _open_position.get("tp_level")
+        sl_level = _open_position.get("sl_level")
 
-        if signal["reason"] == "timeout":
-            return float(bar["close"])
+        reason = signal.get("reason")
+        if reason == "take_profit" and tp_level is not None:
+            if side == "long":
+                price = min(price, float(tp_level))
+            else:
+                price = max(price, float(tp_level))
+        elif reason == "stop_loss" and sl_level is not None:
+            if side == "long":
+                price = max(price, float(sl_level))
+            else:
+                price = min(price, float(sl_level))
+        elif reason == "timeout":
+            price = float(bar["close"])
 
-        # Fallback: use closing price if signal lacks context
-        return float(bar["close"])
+        return price
 
     def _current_pnl_stats(self) -> PnlStats:
         state = self.risk_manager.state
@@ -279,8 +293,8 @@ class _ActivePosition:
 
 
 __all__ = [
-    "Backtester",
     "BacktestResult",
     "BacktestTrade",
+    "Backtester",
     "DataProviderProtocol",
 ]
