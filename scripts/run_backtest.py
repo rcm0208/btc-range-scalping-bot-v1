@@ -27,6 +27,8 @@ def load_yaml(path: Path) -> Dict[str, Any]:
 
 
 def parse_dt(value: str) -> datetime:
+    if value.endswith("Z"):
+        value = value[:-1] + "+00:00"
     dt = datetime.fromisoformat(value)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
