@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import pytest
+
 from src.core.risk_manager import RiskManager, RiskParams
 from src.utils import PnlStats
 
@@ -106,6 +108,17 @@ def test_daily_loss_limit_blocks_when_enabled() -> None:
 
     assert result["allowed"] is False
     assert result["reason"] == "daily_loss"
+    assert manager.state.stopped_reason == "daily_loss"
+
+
+def test_daily_loss_compounds_returns() -> None:
+    """50% win followed by 50% loss should net -25% (not 0%)."""
+    manager = RiskManager(make_params(use_daily_loss_limit=True, daily_loss_limit_pct=-0.2))
+    base_time = datetime(2025, 1, 1, 0, 0, 0)
+    manager.on_close(base_time, pnl_pct=0.5, is_win=True)
+    manager.on_close(base_time + timedelta(minutes=1), pnl_pct=-0.5, is_win=False)
+
+    assert manager.state.daily_realized_pct == pytest.approx(-0.25)
     assert manager.state.stopped_reason == "daily_loss"
 
 

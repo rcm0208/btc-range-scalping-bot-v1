@@ -145,7 +145,8 @@ class RiskManager:
         """
         self.state.last_close_time = now
         self.state.open_positions = max(0, self.state.open_positions - 1)
-        self.state.daily_realized_pct += pnl_pct
+        # accumulate with compounding to reflect actual equity trajectory
+        self.state.daily_realized_pct = ((1 + self.state.daily_realized_pct) * (1 + pnl_pct)) - 1
 
         if is_win:
             self.state.losing_streak = 0

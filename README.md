@@ -31,3 +31,21 @@ BTC Range Scalping Bot v1
 - Lint: `ruff check .`
 - テスト: `pytest -q`
 Makefile/pyproject でエイリアスを後続追加予定。
+
+## バックテスト実行（暫定）
+- 事前準備:
+  - `config/env.yaml` の `data_paths.ohlcv_1m` / `ohlcv_15m` を手元の Parquet パスに設定（例: `data/ohlcv_1m.parquet`）。
+  - 手数料・スリッページは `env.yaml` の `taker_fee_pct` と `slippage_model.value` を使用。
+- 実行例:
+  ```
+  python scripts/run_backtest.py \
+    --start 2024-01-01T00:00:00Z \
+    --end   2024-01-02T00:00:00Z \
+    --env config/env.yaml \
+    --strategy config/strategy.yaml \
+    --risk config/risk.yaml \
+    --output backtest_result.json \
+    --position-size 1.0 \
+    --base-equity 1.0
+  ```
+- 出力: `backtest_result.json` に trades 一覧と summary（win_rate, profit_factor, max_drawdown など）が保存されます。PyYAML が未導入の環境では設定ファイルを JSON 形式で書くことも可能です。
