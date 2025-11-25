@@ -50,7 +50,7 @@
 
 ## runner
 
-- [ ] [T60] モード骨組み: bt/live モード切替、緊急停止フラグ読み込み、config 読込と依存生成のスタブを実装。参照: `docs/design/runner.md`, `docs/basic_design.md`（フロー）。 （依存: T01, T21, T31, T40, T41, T42, T43, T51）
+- [x] [T60] モード骨組み: bt/live モード切替、緊急停止フラグ読み込み、config 読込と依存生成のスタブを実装。参照: `docs/design/runner.md`, `docs/basic_design.md`（フロー）。 （依存: T01, T21, T31, T40, T41, T42, T43, T51）
 
 ## テスト/データ/ツール
 
