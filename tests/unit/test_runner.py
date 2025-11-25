@@ -175,6 +175,32 @@ def test_build_dependencies_respects_empty_environ(monkeypatch: pytest.MonkeyPat
     assert deps.broker_client is None
 
 
+def test_build_dependencies_uses_env_slack_webhook(tmp_path: Path) -> None:
+    cfg_paths = _write_configs(
+        tmp_path,
+        paths={"1m": tmp_path / "ohlcv_1m.parquet", "15m": tmp_path / "ohlcv_15m.parquet"},
+    )
+    deps = build_dependencies(
+        cfg_paths,
+        environ={"SLACK_WEBHOOK_URL": "https://example.com/webhook"},
+    )
+    assert deps.notifier is not None
+    deps.notifier.close()
+
+
+def test_build_dependencies_uses_env_api_base(tmp_path: Path) -> None:
+    cfg_paths = _write_configs(
+        tmp_path,
+        paths={"1m": tmp_path / "ohlcv_1m.parquet", "15m": tmp_path / "ohlcv_15m.parquet"},
+    )
+    deps = build_dependencies(
+        cfg_paths,
+        environ={"HL_AGENT_PRIVATE_KEY": "dummy", "HL_API_BASE": "https://sandbox.example"},
+    )
+    assert deps.broker_client is not None
+    assert deps.broker_client.api_base == "https://sandbox.example"
+
+
 def test_run_backtest_mode_returns_result(tmp_path: Path) -> None:
     bars_1m = _make_bars("1m", [100.0, 101.0], 0, 60_000)
     bars_15m = _make_bars("15m", [100.0], 0, 900_000)

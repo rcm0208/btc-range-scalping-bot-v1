@@ -153,7 +153,7 @@ def build_dependencies(
     risk_manager = RiskManager(_build_risk_params(risk_cfg))
     data_provider = _build_data_provider(env_cfg)
 
-    notifier = _build_notifier(env_cfg)
+    notifier = _build_notifier(env_cfg, environ=environ)
     broker_client = _build_broker_client(env_cfg, environ=environ, logger=logger_adapter)
 
     return RunnerDependencies(
@@ -259,10 +259,15 @@ def _build_data_provider(env_cfg: Mapping[str, Any]) -> DataProvider:
             "15m": str(data_paths["ohlcv_15m"]),
         }
     )
-
-
-def _build_notifier(env_cfg: Mapping[str, Any]) -> Optional[Notifier]:
+def _build_notifier(
+    env_cfg: Mapping[str, Any],
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> Optional[Notifier]:
     webhook_url = str(env_cfg.get("slack_webhook_url") or "").strip()
+    env_vars = environ if environ is not None else os.environ
+    if not webhook_url:
+        webhook_url = str(env_vars.get("SLACK_WEBHOOK_URL") or "").strip()
     if not webhook_url:
         return None
     environment = str(env_cfg.get("environment", "bt"))
@@ -289,7 +294,9 @@ def _build_broker_client(
                     "Broker client not initialized: HL_AGENT_PRIVATE_KEY is missing in live environment"
                 )
         return None
-    api_base = str(env_cfg.get("api_base", "https://api.hyperliquid.xyz"))
+    api_base = str(
+        env_vars.get("HL_API_BASE") or env_cfg.get("api_base") or "https://api.hyperliquid.xyz"
+    )
     return BrokerClient(api_base=api_base, private_key=private_key)
 
 
