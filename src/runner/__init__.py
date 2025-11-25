@@ -208,9 +208,10 @@ def load_configs(paths: ConfigPaths) -> tuple[dict[str, Any], dict[str, Any], di
             "cooldown_minutes",
             "max_consecutive_losses",
             "use_daily_loss_limit",
-            "daily_loss_limit_pct",
         ],
     )
+    if risk_cfg.get("use_daily_loss_limit"):
+        _validate_required(risk_cfg, ["daily_loss_limit_pct"])
 
     return env_cfg, strat_cfg, risk_cfg
 
@@ -246,7 +247,7 @@ def _build_risk_params(cfg: Mapping[str, Any]) -> RiskParams:
         cooldown_minutes=cfg["cooldown_minutes"],
         max_consecutive_losses=cfg["max_consecutive_losses"],
         use_daily_loss_limit=cfg["use_daily_loss_limit"],
-        daily_loss_limit_pct=cfg["daily_loss_limit_pct"],
+        daily_loss_limit_pct=cfg.get("daily_loss_limit_pct", 0.0),
     )
 
 

@@ -115,6 +115,55 @@ def test_build_dependencies_with_defaults(tmp_path: Path) -> None:
     assert deps.broker_client is None  # HL_AGENT_PRIVATE_KEY not set
 
 
+def test_build_dependencies_allows_missing_daily_loss_when_disabled(tmp_path: Path) -> None:
+    env_cfg = {
+        "api_base": "https://api.hyperliquid.xyz",
+        "taker_fee_pct": 0.0,
+        "slippage_model": {"type": "bps", "value": 0.0},
+        "environment": "bt",
+        "slack_webhook_url": "",
+        "data_paths": {
+            "ohlcv_1m": str(tmp_path / "ohlcv_1m.parquet"),
+            "ohlcv_15m": str(tmp_path / "ohlcv_15m.parquet"),
+        },
+    }
+    strat_cfg = {
+        "vwap_deviation_pct_long": 0.006,
+        "vwap_deviation_pct_short": 0.006,
+        "rsi_long_max": 25,
+        "rsi_short_min": 75,
+        "tp_pct": 0.003,
+        "sl_pct": -0.0022,
+        "timeout_minutes": 12,
+        "pin_bar_ratio": 2.0,
+        "regime": {
+            "adx_max": 20,
+            "bb_width_pct_max": 0.005,
+            "ema_flatness_threshold": 0.0001,
+            "ema_spread_pct_max": 0.0015,
+            "vwap_reversion_check": True,
+            "vwap_deviation_pct_max": 0.005,
+        },
+    }
+    risk_cfg = {
+        "max_open_positions": 1,
+        "cooldown_minutes": 4,
+        "max_consecutive_losses": 3,
+        "use_daily_loss_limit": False,
+    }
+    env_path = tmp_path / "env.json"
+    strat_path = tmp_path / "strategy.json"
+    risk_path = tmp_path / "risk.json"
+    env_path.write_text(json.dumps(env_cfg), encoding="utf-8")
+    strat_path.write_text(json.dumps(strat_cfg), encoding="utf-8")
+    risk_path.write_text(json.dumps(risk_cfg), encoding="utf-8")
+    cfg_paths = ConfigPaths(env=env_path, strategy=strat_path, risk=risk_path)
+
+    deps = build_dependencies(cfg_paths, environ={})
+    assert deps.risk_manager is not None
+    assert deps.risk_manager.params.use_daily_loss_limit is False
+
+
 def test_build_dependencies_respects_empty_environ(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Explicit empty environ should prevent reading real env vars for broker."""
     monkeypatch.setenv("HL_AGENT_PRIVATE_KEY", "should_not_be_used")
