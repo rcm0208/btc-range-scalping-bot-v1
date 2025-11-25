@@ -1,42 +1,41 @@
-BTC Range Scalping Bot v1
-========================
+BTC Range Scalping Bot v1（概要）
+================================
 
-開発メモ（プロト段階）
+プロト段階の開発メモです。すべて日本語で記載しています。
 
 ## セットアップ
-- Python 3.11+ を前提。必要なら仮想環境を作成:
-  - `python -m venv .venv && source .venv/bin/activate`
-- 依存インストール（未定義の場合は後続で requirements.txt / pyproject.toml を整備）:
-  - `pip install -r requirements.txt`
+- 前提: Python 3.11+
+- 仮想環境（推奨）: `python -m venv .venv && source .venv/bin/activate`
+- 依存インストール: `pip install -r requirements.txt`  
+  （依存が増えたら requirements.txt / pyproject.toml を更新）
 
 ## コンフィグ
-- 環境・戦略パラメータは `config/strategy.yaml` `config/risk.yaml` `config/env.yaml` を編集。
-- 機密値は `config/env.example` を参考に `.env` を作成して管理する（Hyperliquid の agent 鍵や Slack Webhook など）。
+- 戦略・リスク・環境設定: `config/strategy.yaml`, `config/risk.yaml`, `config/env.yaml`
+- 機密値: `config/env.example` を参考に `.env` を作成して管理（Hyperliquid agent鍵・Slack Webhookなど）
 
 ## ドキュメントの読み順
-1. `docs/requirements.md`（要件のソース）
+1. `docs/requirements.md`（要件のソースオブトゥルース）
 2. `docs/basic_design.md`（基本設計・ディレクトリ構成）
-3. `docs/design/` 配下のモジュール別詳細
-4. `docs/hyperliquid/`（取引所仕様）
+3. `docs/design/` 配下の詳細設計
+4. `docs/hyperliquid/`（取引所仕様・署名・レートリミット）
 
-## ディレクトリ概要（実装）
-- `src/` アプリ本体（core: 戦略ロジック、infra: 外部I/O、runner/backtester/config/utils）
-- `tests/` ユニット/インテグレーション/fixtures
-- `config/` 戦略・リスク・環境設定（env.example をベースに .env を用意）
-- `scripts/` ユーティリティ（ヒストリカル取得・BT/LIVE 実行ラッパ）
-- `data/` ローカルBT用データ（git 管理外推奨）
+## ディレクトリ概要
+- `src/` 本体コード（core: 戦略/指標/リスク、infra: I/O、runner/backtester/config/utils）
+- `tests/` ユニット・インテグレーション・fixtures
+- `config/` 戦略・リスク・環境設定
+- `scripts/` ユーティリティ（バックテスト/ライブ実行ラッパ想定）
+- `data/` ローカルバックテスト用データ（git 管理外推奨）
 
-## 想定コマンド（今後整備）
+## よく使うコマンド（今後 Makefile/pyproject でエイリアス化予定）
 - フォーマット: `black .`
 - Lint: `ruff check .`
 - テスト: `pytest -q`
-Makefile/pyproject でエイリアスを後続追加予定。
 
 ## バックテスト実行（暫定）
-- 事前準備:
-  - `config/env.yaml` の `data_paths.ohlcv_1m` / `ohlcv_15m` を手元の Parquet パスに設定（例: `data/ohlcv_1m.parquet`）。
-  - 手数料・スリッページは `env.yaml` の `taker_fee_pct` と `slippage_model.value` を使用。
-- 実行例:
+- 事前準備
+  - `config/env.yaml` の `data_paths.ohlcv_1m` / `ohlcv_15m` に手元の Parquet を設定（例: `data/ohlcv_1m.parquet`）
+  - 手数料/スリッページは `env.yaml` の `taker_fee_pct` と `slippage_model.value` を参照
+- 実行例
   ```
   python scripts/run_backtest.py \
     --start 2024-01-01T00:00:00Z \
@@ -48,4 +47,4 @@ Makefile/pyproject でエイリアスを後続追加予定。
     --position-size 1.0 \
     --base-equity 1.0
   ```
-- 出力: `backtest_result.json` に trades 一覧と summary（win_rate, profit_factor, max_drawdown など）が保存されます。PyYAML が未導入の環境では設定ファイルを JSON 形式で書くことも可能です。
+- 出力: `backtest_result.json` にトレード一覧と summary（win_rate, profit_factor, max_drawdown など）。PyYAML が無い環境では設定を JSON 形式で記述しても動作可。

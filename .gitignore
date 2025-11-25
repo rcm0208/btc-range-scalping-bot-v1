@@ -16,7 +16,8 @@ __pycache__/
 .vscode/
 
 # Data/artifacts
-*.parquet
 data/
+*.parquet
+!tests/fixtures/*.parquet
 
 .serena

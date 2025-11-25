@@ -54,6 +54,6 @@
 
 ## テスト/データ/ツール
 
-- [ ] [T70] fixtures: 小さなダミー 1m/15m データを `tests/fixtures/` に配置し、backtester の smoke テストに流用。参照: `docs/design/data_provider.md`（Bar 形式）。 （依存: T02, T40）
+- [x] [T70] fixtures: 小さなダミー 1m/15m データを `tests/fixtures/` に配置し、backtester の smoke テストに流用。参照: `docs/design/data_provider.md`（Bar 形式）。 （依存: T02, T40）
 - [ ] [T71] unit tests: indicator_engine / strategy_core / risk_manager 用に各 1 本追加。参照: 各 design ドキュメントのテスト方針。 （依存: T11, T21, T31）
 - [ ] [T72] ツール整備: Makefile または pyproject で `black`, `ruff`, `pytest -q` エイリアスを用意し、README に記載。（依存なし）
