@@ -96,6 +96,8 @@ class Backtester:
         self.slippage_bps = slippage_bps
         self.position_size = position_size
         self.base_equity = base_equity
+        self._last_15m_bar: Optional[Bar] = None
+        self._last_15m_indicators: Optional[Indicators] = None
 
     def run(self, start: datetime, end: datetime) -> BacktestResult:
         bars_1m = list(self.data_provider.load_ohlcv("1m", start, end))
@@ -185,16 +187,13 @@ class Backtester:
         idx_15m: int,
         current_end_ms: int,
     ) -> tuple[Optional[Bar], Optional[Indicators], int]:
-        delivered_bar: Optional[Bar] = None
-        delivered_indicators: Optional[Indicators] = None
         while idx_15m < len(bars_15m) and bars_15m[idx_15m]["end_ms"] <= current_end_ms:
             current_bar = bars_15m[idx_15m]
             indicators = self.indicator_engine.update("15m", current_bar)
-            if current_bar["end_ms"] == current_end_ms:
-                delivered_bar = current_bar
-                delivered_indicators = indicators
+            self._last_15m_bar = current_bar
+            self._last_15m_indicators = indicators
             idx_15m += 1
-        return delivered_bar, delivered_indicators, idx_15m
+        return self._last_15m_bar, self._last_15m_indicators, idx_15m
 
     def _open_position(self, bar: Bar, signal: Signal, equity: float) -> "_ActivePosition":
         side = signal["side"]
