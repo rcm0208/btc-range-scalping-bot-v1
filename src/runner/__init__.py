@@ -274,7 +274,7 @@ def _build_broker_client(
     environ: Mapping[str, str] | None = None,
     logger: logging.Logger | logging.LoggerAdapter | None = None,
 ) -> Optional[BrokerClient]:
-    env_vars = environ or os.environ
+    env_vars = environ if environ is not None else os.environ
     private_key = env_vars.get("HL_AGENT_PRIVATE_KEY")
     env_label = str(env_cfg.get("environment", "bt"))
     if not private_key:
@@ -301,6 +301,9 @@ def _is_emergency_stop(flags: RunFlags) -> bool:
         return content in {"1", "true", "on", "yes", "stop", "halt"}
     except FileNotFoundError:
         return False
+    except (PermissionError, OSError) as exc:
+        logger.warning("Failed to read emergency stop file: %s", exc)
+        return True
 
 
 def _load_yaml_or_json(path: Path) -> dict[str, Any]:

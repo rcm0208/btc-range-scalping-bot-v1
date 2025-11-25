@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
@@ -112,6 +113,17 @@ def test_build_dependencies_with_defaults(tmp_path: Path) -> None:
     assert deps.logger.extra.get("env") == "bt"  # type: ignore[attr-defined]
     assert deps.notifier is None  # slack_webhook_url is empty
     assert deps.broker_client is None  # HL_AGENT_PRIVATE_KEY not set
+
+
+def test_build_dependencies_respects_empty_environ(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Explicit empty environ should prevent reading real env vars for broker."""
+    monkeypatch.setenv("HL_AGENT_PRIVATE_KEY", "should_not_be_used")
+    cfg_paths = _write_configs(
+        tmp_path,
+        paths={"1m": tmp_path / "ohlcv_1m.parquet", "15m": tmp_path / "ohlcv_15m.parquet"},
+    )
+    deps = build_dependencies(cfg_paths, environ={})
+    assert deps.broker_client is None
 
 
 def test_run_backtest_mode_returns_result(tmp_path: Path) -> None:
