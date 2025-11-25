@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable
 
+import pytest
 import pyarrow as pa
 import pyarrow.parquet as pq
 
@@ -13,6 +14,7 @@ from src.utils import Bar, Timeframe
 
 
 def _write_parquet(path: Path, bars: Iterable[Bar]) -> None:
+    bars = list(bars)
     table = pa.Table.from_pydict(
         {
             "open": [b["open"] for b in bars],
@@ -100,7 +102,7 @@ def test_build_dependencies_with_defaults(tmp_path: Path) -> None:
         tmp_path,
         paths={"1m": tmp_path / "ohlcv_1m.parquet", "15m": tmp_path / "ohlcv_15m.parquet"},
     )
-    deps = build_dependencies(cfg_paths)
+    deps = build_dependencies(cfg_paths, environ={})
 
     assert deps.env_config["data_paths"]["ohlcv_1m"].endswith("ohlcv_1m.parquet")
     assert deps.data_provider is not None
@@ -131,6 +133,7 @@ def test_run_backtest_mode_returns_result(tmp_path: Path) -> None:
         end=end,
         position_size=1.0,
         base_equity=1.0,
+        environ={},
     )
 
     assert hasattr(result, "final_equity")
@@ -150,6 +153,7 @@ def test_run_respects_emergency_stop_flag(tmp_path: Path) -> None:
         "live",
         config_paths=cfg_paths,
         flags=RunFlags(emergency_stop_path=stop_file),
+        environ={},
     )
 
     assert result["status"] == "stopped"
@@ -167,5 +171,40 @@ def test_run_emergency_stop_truthy_values(tmp_path: Path) -> None:
             "live",
             config_paths=cfg_paths,
             flags=RunFlags(emergency_stop_path=stop_file),
+            environ={},
         )
         assert result["status"] == "stopped"
+
+
+def test_run_emergency_stop_falsey_values(tmp_path: Path) -> None:
+    cfg_paths = _write_configs(
+        tmp_path,
+        paths={"1m": tmp_path / "ohlcv_1m.parquet", "15m": tmp_path / "ohlcv_15m.parquet"},
+    )
+    for value in ["0", "false", "off", "no", ""]:
+        stop_file = tmp_path / f"stop_false_{value or 'empty'}.flag"
+        stop_file.write_text(value, encoding="utf-8")
+        result = run(
+            "live",
+            config_paths=cfg_paths,
+            flags=RunFlags(emergency_stop_path=stop_file),
+            environ={},
+        )
+        assert result["status"] != "stopped"
+
+
+def test_run_backtest_requires_utc_datetimes(tmp_path: Path) -> None:
+    cfg_paths = _write_configs(
+        tmp_path,
+        paths={"1m": tmp_path / "ohlcv_1m.parquet", "15m": tmp_path / "ohlcv_15m.parquet"},
+    )
+    naive_start = datetime.fromtimestamp(0)
+    aware_end = datetime.fromtimestamp(60, tz=timezone.utc)
+    with pytest.raises(ValueError):
+        run(
+            "bt",
+            config_paths=cfg_paths,
+            start=naive_start,
+            end=aware_end,
+            environ={},
+        )

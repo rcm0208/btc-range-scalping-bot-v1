@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
@@ -65,6 +65,7 @@ def run(
     end: Optional[datetime] = None,
     position_size: float = 1.0,
     base_equity: float = 1.0,
+    environ: Mapping[str, str] | None = None,
 ) -> Any:
     """Entry point for bt/live modes.
 
@@ -76,6 +77,7 @@ def run(
         end: Backtest end (required for bt).
         position_size: Position size multiplier for bt.
         base_equity: Starting equity for bt.
+        environ: Optional environment mapping for dependency construction (defaults to os.environ).
     """
     cfg_paths = config_paths or ConfigPaths()
     run_flags = flags or RunFlags()
@@ -83,7 +85,7 @@ def run(
     if normalized_mode not in {"bt", "live"}:
         raise ValueError("mode must be 'bt' or 'live'")
 
-    deps = build_dependencies(cfg_paths)
+    deps = build_dependencies(cfg_paths, environ=environ)
     log = deps.logger
 
     if _is_emergency_stop(run_flags):
@@ -93,6 +95,8 @@ def run(
     if normalized_mode == "bt":
         if start is None or end is None:
             raise ValueError("start and end must be provided for backtest mode")
+        _ensure_utc_datetime(start, "start")
+        _ensure_utc_datetime(end, "end")
         slippage_model = deps.env_config.get("slippage_model", {}) or {}
         slippage_bps = float(slippage_model.get("value", 0.0))
         fee_rate = float(deps.env_config.get("taker_fee_pct", 0.0))
@@ -150,7 +154,7 @@ def build_dependencies(
     data_provider = _build_data_provider(env_cfg)
 
     notifier = _build_notifier(env_cfg)
-    broker_client = _build_broker_client(env_cfg, environ=environ)
+    broker_client = _build_broker_client(env_cfg, environ=environ, logger=logger_adapter)
 
     return RunnerDependencies(
         env_config=env_cfg,
@@ -268,10 +272,21 @@ def _build_broker_client(
     env_cfg: Mapping[str, Any],
     *,
     environ: Mapping[str, str] | None = None,
+    logger: logging.Logger | logging.LoggerAdapter | None = None,
 ) -> Optional[BrokerClient]:
     env_vars = environ or os.environ
     private_key = env_vars.get("HL_AGENT_PRIVATE_KEY")
+    env_label = str(env_cfg.get("environment", "bt"))
     if not private_key:
+        if env_label.lower() == "live":
+            if logger:
+                logger.warning(
+                    "Broker client not initialized: HL_AGENT_PRIVATE_KEY is missing in live environment"
+                )
+            else:
+                logging.getLogger(__name__).warning(
+                    "Broker client not initialized: HL_AGENT_PRIVATE_KEY is missing in live environment"
+                )
         return None
     api_base = str(env_cfg.get("api_base", "https://api.hyperliquid.xyz"))
     return BrokerClient(api_base=api_base, private_key=private_key)
@@ -293,7 +308,12 @@ def _load_yaml_or_json(path: Path) -> dict[str, Any]:
         raise FileNotFoundError(f"Config file not found: {path}")
     text = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".json":
-        return json.loads(text)
+        data = json.loads(text)
+        if not isinstance(data, dict):
+            raise TypeError(
+                f"Expected dict in config file, got {type(data).__name__}: {path}"
+            )
+        return data
     if yaml is None:
         raise ImportError(
             "PyYAML is required to load YAML config files. "
@@ -311,6 +331,13 @@ def _validate_required(cfg: Mapping[str, Any], required_keys: list[str]) -> None
     missing = [k for k in required_keys if k not in cfg or cfg[k] in (None, "")]
     if missing:
         raise ValueError(f"Missing required config keys: {missing}")
+
+
+def _ensure_utc_datetime(dt: datetime, name: str) -> None:
+    if dt.tzinfo is None:
+        raise ValueError(f"{name} must be timezone-aware and UTC")
+    if dt.tzinfo != timezone.utc:
+        raise ValueError(f"{name} must be in UTC, got tz={dt.tzinfo}")
 
 
 __all__ = [
