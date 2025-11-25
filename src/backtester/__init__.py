@@ -100,8 +100,15 @@ class Backtester:
         self._last_15m_indicators: Optional[Indicators] = None
 
     def run(self, start: datetime, end: datetime) -> BacktestResult:
-        bars_1m = list(self.data_provider.load_ohlcv("1m", start, end))
-        bars_15m = list(self.data_provider.load_ohlcv("15m", start, end))
+        bars_1m_iter = self.data_provider.load_ohlcv("1m", start, end)
+        bars_15m_iter = self.data_provider.load_ohlcv("15m", start, end)
+        if bars_1m_iter is None:
+            raise ValueError("No 1m bars available for backtest window")
+        bars_1m = list(bars_1m_iter)
+        if bars_15m_iter is None:
+            bars_15m = []
+        else:
+            bars_15m = list(bars_15m_iter)
         if not bars_1m:
             raise ValueError("No 1m bars available for backtest window")
 
