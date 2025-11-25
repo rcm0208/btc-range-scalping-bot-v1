@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping, Optional
 
@@ -347,7 +347,8 @@ def _validate_required(cfg: Mapping[str, Any], required_keys: list[str]) -> None
 def _ensure_utc_datetime(dt: datetime, name: str) -> None:
     if dt.tzinfo is None:
         raise ValueError(f"{name} must be timezone-aware and UTC")
-    if dt.tzinfo != timezone.utc:
+    offset = dt.utcoffset()
+    if offset is None or offset != timedelta(0):
         raise ValueError(f"{name} must be in UTC, got tz={dt.tzinfo}")
 
 

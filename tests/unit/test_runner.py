@@ -295,3 +295,26 @@ def test_run_backtest_requires_utc_datetimes(tmp_path: Path) -> None:
             end=aware_end,
             environ={},
         )
+
+
+def test_run_backtest_allows_zoneinfo_utc(tmp_path: Path) -> None:
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        pytest.skip("ZoneInfo not available")
+
+    one_path = tmp_path / "ohlcv_1m.parquet"
+    fifteen_path = tmp_path / "ohlcv_15m.parquet"
+    _write_parquet(one_path, _make_bars("1m", [100.0, 101.0], 0, 60_000))
+    _write_parquet(fifteen_path, _make_bars("15m", [100.0], 0, 900_000))
+    cfg_paths = _write_configs(tmp_path, paths={"1m": one_path, "15m": fifteen_path})
+    start = datetime.fromtimestamp(0, tz=ZoneInfo("UTC"))
+    end = start + timedelta(minutes=1)
+    result = run(
+        "bt",
+        config_paths=cfg_paths,
+        start=start,
+        end=end,
+        environ={},
+    )
+    assert hasattr(result, "final_equity")
