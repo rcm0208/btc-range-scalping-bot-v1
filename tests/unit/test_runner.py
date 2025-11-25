@@ -108,6 +108,8 @@ def test_build_dependencies_with_defaults(tmp_path: Path) -> None:
     assert deps.strategy is not None
     assert deps.risk_manager is not None
     assert deps.logger.extra.get("env") == "bt"  # type: ignore[attr-defined]
+    assert deps.notifier is None  # slack_webhook_url is empty
+    assert deps.broker_client is None  # HL_AGENT_PRIVATE_KEY not set
 
 
 def test_run_backtest_mode_returns_result(tmp_path: Path) -> None:
@@ -151,3 +153,19 @@ def test_run_respects_emergency_stop_flag(tmp_path: Path) -> None:
     )
 
     assert result["status"] == "stopped"
+
+
+def test_run_emergency_stop_truthy_values(tmp_path: Path) -> None:
+    cfg_paths = _write_configs(
+        tmp_path,
+        paths={"1m": tmp_path / "ohlcv_1m.parquet", "15m": tmp_path / "ohlcv_15m.parquet"},
+    )
+    for value in ["1", "true", "on", "yes", "stop", "halt"]:
+        stop_file = tmp_path / f"stop_{value}.flag"
+        stop_file.write_text(value, encoding="utf-8")
+        result = run(
+            "live",
+            config_paths=cfg_paths,
+            flags=RunFlags(emergency_stop_path=stop_file),
+        )
+        assert result["status"] == "stopped"

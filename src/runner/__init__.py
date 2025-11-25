@@ -39,7 +39,7 @@ class RunFlags:
     """Runtime flags toggled by the operator."""
 
     emergency_stop_path: Optional[Path] = None
-    dry_run: bool = False
+    dry_run: bool = False  # TODO: Implement dry_run support in live mode
 
 
 @dataclass
@@ -281,13 +281,16 @@ def _is_emergency_stop(flags: RunFlags) -> bool:
     path = flags.emergency_stop_path
     if not path:
         return False
-    if not path.exists():
+    try:
+        content = path.read_text(encoding="utf-8").strip().lower()
+        return content in {"1", "true", "on", "yes", "stop", "halt"}
+    except FileNotFoundError:
         return False
-    content = path.read_text(encoding="utf-8").strip().lower()
-    return content in {"1", "true", "on", "yes", "stop", "halt"}
 
 
 def _load_yaml_or_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
     text = path.read_text(encoding="utf-8")
     if path.suffix.lower() == ".json":
         return json.loads(text)
@@ -300,7 +303,7 @@ def _load_yaml_or_json(path: Path) -> dict[str, Any]:
     if data is None:
         return {}
     if not isinstance(data, dict):
-        raise ValueError(f"Unexpected config format in {path}")
+        raise TypeError(f"Expected dict in config file, got {type(data).__name__}: {path}")
     return data
 
 
