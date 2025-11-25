@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 _TIMEFRAME_TO_MS: Dict[Timeframe, int] = {
     "1m": 60_000,
     "15m": 900_000,
+    "1h": 3_600_000,
+    "4h": 14_400_000,
 }
 
 _REQUIRED_COLUMNS = [
@@ -50,7 +52,7 @@ class DataProvider:
         """指定範囲のOHLCVをParquetから読み出す。
 
         Args:
-            timeframe: 読み出す足（1m/15m）
+            timeframe: 読み出す足（1m/15m/1h/4h）
             start: 取得開始時刻（UTC想定）
             end: 取得終了時刻（UTC想定）
 
@@ -67,6 +69,14 @@ class DataProvider:
         table = self._read_parquet(path)
         data = self._select_required_columns(table, path)
         rows = self._filter_rows(data, timeframe, start_ms, end_ms)
+        if not rows and timeframe in {"1h", "4h"}:
+            # 1h/4h は 15m からリサンプルを試みる
+            base_tf = "15m"
+            if base_tf not in self.timeframe_paths:
+                return
+            base_table = self._read_parquet(self._get_path(base_tf))
+            base_data = self._select_required_columns(base_table, self._get_path(base_tf))
+            rows = self._resample_from_lower(base_data, base_tf, timeframe, start_ms, end_ms)
         if not rows:
             return
 
@@ -150,6 +160,44 @@ class DataProvider:
                 "end_ms": bar_end,
                 "symbol": str(data["symbol"][idx]),
                 "timeframe": timeframe,
+            }
+            rows.append(bar)
+        rows.sort(key=lambda b: b["start_ms"])
+        return rows
+
+    def _resample_from_lower(
+        self,
+        data: Mapping[str, Sequence],
+        lower_tf: Timeframe,
+        target_tf: Timeframe,
+        start_ms: int,
+        end_ms: int,
+    ) -> list[Bar]:
+        """15m から 1h/4h へ単純リサンプル."""
+        factor = _TIMEFRAME_TO_MS[target_tf] // _TIMEFRAME_TO_MS[lower_tf]
+        rows: list[Bar] = []
+        total = len(data["start_ms"])
+        for i in range(0, total, factor):
+            chunk_indices = range(i, min(i + factor, total))
+            start_chunk = int(data["start_ms"][i])
+            end_chunk = int(data["end_ms"][min(i + factor - 1, total - 1)])
+            if start_chunk < start_ms or end_chunk > end_ms:
+                continue
+            highs = [float(data["high"][j]) for j in chunk_indices]
+            lows = [float(data["low"][j]) for j in chunk_indices]
+            opens = float(data["open"][i])
+            closes = float(data["close"][min(i + factor - 1, total - 1)])
+            volume = sum(float(data["volume"][j]) for j in chunk_indices)
+            bar: Bar = {
+                "open": opens,
+                "high": max(highs),
+                "low": min(lows),
+                "close": closes,
+                "volume": volume,
+                "start_ms": start_chunk,
+                "end_ms": end_chunk,
+                "symbol": str(data["symbol"][i]),
+                "timeframe": target_tf,
             }
             rows.append(bar)
         rows.sort(key=lambda b: b["start_ms"])

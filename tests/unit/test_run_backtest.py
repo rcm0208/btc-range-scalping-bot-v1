@@ -66,21 +66,18 @@ def test_run_backtest_from_configs_smoke(tmp_path: Path) -> None:
         "data_paths": {"ohlcv_1m": str(one_path), "ohlcv_15m": str(fifteen_path)},
     }
     strategy = {
-        "vwap_deviation_pct_long": 0.006,
-        "vwap_deviation_pct_short": 0.006,
-        "rsi_long_max": 25,
-        "rsi_short_min": 75,
-        "tp_pct": 0.003,
-        "sl_pct": -0.0022,
-        "timeout_minutes": 12,
-        "pin_bar_ratio": 2.0,
-        "regime": {
-            "adx_max": 20,
-            "bb_width_pct_max": 0.005,
-            "ema_flatness_threshold": 0.0001,
-            "ema_spread_pct_max": 0.0015,
-            "vwap_reversion_check": True,
-            "vwap_deviation_pct_max": 0.005,
+        "candle_intervals": {"signal": "1m", "trend": "15m"},
+        "regime": {"adx_min": 10, "ema_gap_pct_min": 0.0, "require_trend": False},
+        "entry": {
+            "bb_touch_buffer_pct": 0.01,
+            "rsi_long_max": 100,
+            "rsi_short_min": 0,
+            "htf_vwap_pullback_pct": 0.0,
+            "ema200_guard_pct": 0.1,
+            "atr_sl_mult": 1.0,
+            "min_stop_pct": 0.0001,
+            "rr_ratio": 1.0,
+            "timeout_minutes": 10,
         },
     }
     risk = {

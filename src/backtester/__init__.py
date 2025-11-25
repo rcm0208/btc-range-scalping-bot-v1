@@ -78,6 +78,8 @@ class Backtester:
         slippage_bps: float = 0.0005,
         position_size: float = 1.0,
         base_equity: float = 1.0,
+        signal_timeframe: Timeframe = "1m",
+        trend_timeframe: Optional[Timeframe] = "15m",
     ) -> None:
         if position_size <= 0:
             raise ValueError("position_size must be positive")
@@ -96,31 +98,32 @@ class Backtester:
         self.slippage_bps = slippage_bps
         self.position_size = position_size
         self.base_equity = base_equity
+        self.signal_timeframe = signal_timeframe
+        self.trend_timeframe = trend_timeframe
         self._last_15m_bar: Optional[Bar] = None
         self._last_15m_indicators: Optional[Indicators] = None
 
     def run(self, start: datetime, end: datetime) -> BacktestResult:
-        bars_1m_iter = self.data_provider.load_ohlcv("1m", start, end)
-        bars_15m_iter = self.data_provider.load_ohlcv("15m", start, end)
-        if bars_1m_iter is None:
-            raise ValueError("No 1m bars available for backtest window")
-        bars_1m = list(bars_1m_iter)
-        if bars_15m_iter is None:
-            bars_15m = []
-        else:
-            bars_15m = list(bars_15m_iter)
-        if not bars_1m:
-            raise ValueError("No 1m bars available for backtest window")
+        bars_signal_iter = self.data_provider.load_ohlcv(self.signal_timeframe, start, end)
+        bars_trend_iter = (
+            self.data_provider.load_ohlcv(self.trend_timeframe, start, end) if self.trend_timeframe else None
+        )
+        if bars_signal_iter is None:
+            raise ValueError("No signal timeframe bars available for backtest window")
+        bars_signal = list(bars_signal_iter)
+        bars_trend = [] if bars_trend_iter is None else list(bars_trend_iter)
+        if not bars_signal:
+            raise ValueError("No signal timeframe bars available for backtest window")
 
         trades: list[BacktestTrade] = []
         equity_curve: list[tuple[int, float]] = []
 
         open_position: Optional[_ActivePosition] = None
         equity = self.base_equity
-        idx_15m = 0
+        idx_trend = 0
         last_reset_date = None
 
-        for bar in bars_1m:
+        for bar in bars_signal:
             bar_start_dt = _ms_to_datetime(bar["start_ms"])
             bar_end_dt = _ms_to_datetime(bar["end_ms"])
             bar_date = bar_start_dt.date()
@@ -130,25 +133,34 @@ class Backtester:
                 self.risk_manager.reset_daily(bar_start_dt)
                 last_reset_date = bar_date
 
-            bar_15m, indicators_15m, idx_15m = self._advance_15m(
-                bars_15m, idx_15m, bar["end_ms"]
+            bar_trend, indicators_trend, idx_trend = self._advance_trend(
+                bars_trend, idx_trend, bar["end_ms"]
             )
 
-            indicators_1m = self.indicator_engine.update("1m", bar)
+            indicators_signal = self.indicator_engine.update(self.signal_timeframe, bar)
             signal = self.strategy.update(
-                bar_1m=bar,
-                indicators_1m=indicators_1m,
-                bar_15m=bar_15m,
-                indicators_15m=indicators_15m,
-                open_position=open_position.position if open_position else None,
+                bar,
+                indicators_signal,
+                bar_trend,
+                indicators_trend,
+                open_position.position if open_position else None,
             )
 
             if signal["type"] == "exit" and open_position is not None:
-                trade = self._close_position(bar, signal, open_position)
+                fraction = float(signal.get("context", {}).get("fraction", 1.0) or 1.0)
+                # 部分利確の場合はトレーリングを更新して継続
+                if fraction < 0.999 and open_position.position.get("trailing_start") is not None:
+                    open_position.position["trailing_active"] = True
+                trade = self._close_position(bar, signal, open_position, fraction=fraction)
                 trades.append(trade)
                 equity = trade.equity_after
-                self.risk_manager.on_close(bar_end_dt, trade.net_return_pct, trade.net_return_pct > 0)
-                open_position = None
+                if fraction >= 0.999:
+                    self.risk_manager.on_close(bar_end_dt, trade.net_return_pct, trade.net_return_pct > 0)
+                    open_position = None
+                else:
+                    open_position.notional *= (1 - fraction)
+                    open_position.size *= (1 - fraction)
+                    open_position.position["filled_tp1"] = True
             elif signal["type"] == "enter" and open_position is None:
                 check = self.risk_manager.can_enter(bar_start_dt, self._current_pnl_stats())
                 if check["allowed"]:
@@ -158,7 +170,7 @@ class Backtester:
             equity_curve.append((bar["end_ms"], realized_pct))
 
         if open_position is not None:
-            last_bar = bars_1m[-1]
+            last_bar = bars_signal[-1]
             last_dt = _ms_to_datetime(last_bar["end_ms"])
             forced_exit_signal: Signal = {
                 "type": "exit",
@@ -188,19 +200,21 @@ class Backtester:
             summary=summary,
         )
 
-    def _advance_15m(
+    def _advance_trend(
         self,
-        bars_15m: Sequence[Bar],
-        idx_15m: int,
+        bars_trend: Sequence[Bar],
+        idx_trend: int,
         current_end_ms: int,
     ) -> tuple[Optional[Bar], Optional[Indicators], int]:
-        while idx_15m < len(bars_15m) and bars_15m[idx_15m]["end_ms"] <= current_end_ms:
-            current_bar = bars_15m[idx_15m]
-            indicators = self.indicator_engine.update("15m", current_bar)
+        if not bars_trend:
+            return None, None, idx_trend
+        while idx_trend < len(bars_trend) and bars_trend[idx_trend]["end_ms"] <= current_end_ms:
+            current_bar = bars_trend[idx_trend]
+            indicators = self.indicator_engine.update(self.trend_timeframe or "15m", current_bar)
             self._last_15m_bar = current_bar
             self._last_15m_indicators = indicators
-            idx_15m += 1
-        return self._last_15m_bar, self._last_15m_indicators, idx_15m
+            idx_trend += 1
+        return self._last_15m_bar, self._last_15m_indicators, idx_trend
 
     def _open_position(self, bar: Bar, signal: Signal, equity: float) -> "_ActivePosition":
         side = signal["side"]
@@ -217,24 +231,31 @@ class Backtester:
             "entry_price": entry_fill,
             "entry_time_ms": int(bar["end_ms"]),
             "tp_level": float(cast(float, signal["tp_level"])),
+            "tp1_level": float(signal["tp1_level"]) if signal.get("tp1_level") is not None else None,  # type: ignore[arg-type]
             "sl_level": float(cast(float, signal["sl_level"])),
             "timeout_ms": int(cast(int, signal["timeout_ms"])),
+            "filled_tp1": False,
+            "trailing_active": False,
+            "trailing_start": float(signal["trailing_start"]) if signal.get("trailing_start") is not None else None,  # type: ignore[arg-type]
         }
         return _ActivePosition(position=position, notional=notional, size=size, equity_before=equity)
 
     def _close_position(
-        self, bar: Bar, signal: Signal, open_position: "_ActivePosition"
+        self, bar: Bar, signal: Signal, open_position: "_ActivePosition", fraction: float = 1.0
     ) -> BacktestTrade:
         side = open_position.position["side"]
         exit_base = self._resolve_exit_price(bar, signal, open_position.position)
         exit_fill = self._apply_slippage(exit_base, side, is_entry=False)
         entry_price = float(open_position.position["entry_price"])
 
+        effective_size = open_position.size * fraction
+        effective_notional = open_position.notional * fraction
+
         price_move = exit_fill - entry_price if side == "long" else entry_price - exit_fill
-        gross_pnl = price_move * open_position.size
+        gross_pnl = price_move * effective_size
         gross_return_pct = gross_pnl / open_position.equity_before
-        entry_fee = open_position.notional * self.fee_rate
-        exit_notional = open_position.size * exit_fill
+        entry_fee = effective_notional * self.fee_rate
+        exit_notional = effective_size * exit_fill
         exit_fee = exit_notional * self.fee_rate
         total_fee = entry_fee + exit_fee
         total_fee_pct = total_fee / open_position.equity_before
@@ -246,8 +267,8 @@ class Backtester:
 
         return BacktestTrade(
             side=side,
-            notional=open_position.notional,
-            size=open_position.size,
+            notional=effective_notional,
+            size=effective_size,
             entry_price=entry_price,
             exit_price=exit_fill,
             entry_time_ms=open_position.position["entry_time_ms"],

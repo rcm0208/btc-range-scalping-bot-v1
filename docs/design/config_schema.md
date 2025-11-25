@@ -5,30 +5,27 @@
 ## 提案スキーマ（初期値は basic_design.md を参照）
 
 ### strategy.yaml
-- symbol: string (e.g., "BTC")
-- vwap_deviation_pct_long: float (e.g., 0.006)  # 0.6%（符号は判定ロジック側で付与）
-- vwap_deviation_pct_short: float (e.g., 0.006)  # 0.6%（符号は判定ロジック側で付与）
-- rsi_long_max: float (e.g., 25)
-- rsi_short_min: float (e.g., 75)
-- tp_pct: float (e.g., 0.003)  # +0.30%
-- sl_pct: float (e.g., -0.0022) # -0.22%
-- timeout_minutes: int (e.g., 12)
-- pin_bar_ratio: float (e.g., 2.0)  # ピンバーのヒゲ/実体比率
-- atr_spike_multiplier: float (e.g., 2.5)
-- atr_low_vol_threshold: float (optional, TBD via BT)
-- regime:  # レンジ判定関連のまとめ
-  - adx_max: float (e.g., 20)
-  - bb_width_pct_max: float (e.g., 0.005) # 0.5%
-  - ema_flatness_threshold: float (TBD)   # EMA50/200 の傾きしきい値
-  - ema_spread_pct_max: float (e.g., 0.0015) # EMA50/200 乖離の上限（BTで調整）
-  - vwap_reversion_check: bool (true)
-  - vwap_deviation_pct_max: float (e.g., 0.005) # VWAP乖離の上限（未設定時はbb_width_pct_maxを使用）
+- symbol: string (e.g., "BTCUSDT")
 - candle_intervals:
-  - trend: "15m"
-  - signal: "1m"
-- schedule:
-  - enabled: bool
-  - windows: [ { start: "HH:MM", end: "HH:MM" }, ... ]
+  - signal: string ("1m" | "15m" | "1h" | "4h")
+  - trend: string | null (省略/Nullで signal と同一足を使用)
+- regime:
+  - adx_min: float
+  - ema_gap_pct_min: float  # ema50/ema200 乖離の下限
+  - require_trend: bool     # バイアスが取れないときにスキップするか
+- entry:
+  - mode: string ("reversion" | "breakout")
+  - bb_touch_buffer_pct: float
+  - rsi_long_max: float
+  - rsi_short_min: float
+  - htf_vwap_pullback_pct: float
+  - ema200_guard_pct: float
+  - atr_sl_mult: float
+  - min_stop_pct: float
+  - rr_ratio: float
+  - timeout_minutes: int
+  - session_start_hour_utc: int | null
+  - session_end_hour_utc: int | null
 
 ### risk.yaml
 - max_open_positions: int (1)
@@ -48,6 +45,8 @@
 - data_paths:
   - ohlcv_1m: string (e.g., "data/ohlcv_1m.parquet")
   - ohlcv_15m: string (e.g., "data/ohlcv_15m.parquet")
+  - ohlcv_1h: string (optional)
+  - ohlcv_4h: string (optional)
 
 ### .env（秘匿）
 - HL_AGENT_PRIVATE_KEY
@@ -65,6 +64,6 @@
 - data_paths は存在確認（読み書き許可）を起動時に検証。
 
 ## デフォルト値（初期案）
-- strategy: vwap_deviation_pct=0.006, rsi_long_max=25, rsi_short_min=75, tp_pct=0.003, sl_pct=-0.0022, timeout=12分, adx_max=20, bb_width_pct_max=0.005
+- strategy: signal=4h, trend=null, regime(adx_min=12, ema_gap_pct_min=0.0006), entry(mode=reversion, bb_touch_buffer_pct=0.0005, rsi_long_max=35, rsi_short_min=65, atr_sl_mult=1.8, rr_ratio=2.0, timeout_minutes=720)
 - risk: max_open_positions=1, cooldown_minutes=4, max_consecutive_losses=3, daily_loss_limit_pct=-0.02, use_daily_loss_limit=false
 - env: taker_fee_pct=0.00045, maker_fee_pct=0.00015, slippage_model(bps=0.0005), environment="bt" or "live"

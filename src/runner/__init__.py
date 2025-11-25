@@ -100,6 +100,10 @@ def run(
         slippage_model = deps.env_config.get("slippage_model", {}) or {}
         slippage_bps = float(slippage_model.get("value", 0.0))
         fee_rate = float(deps.env_config.get("taker_fee_pct", 0.0))
+        candle_cfg = deps.strategy_config.get("candle_intervals", {}) or {}
+        signal_tf = str(candle_cfg.get("signal", "1m"))
+        trend_raw = candle_cfg.get("trend")
+        trend_tf = str(trend_raw) if trend_raw not in (None, "") else None
         backtester = Backtester(
             data_provider=deps.data_provider,
             indicator_engine=deps.indicator_engine,
@@ -109,6 +113,8 @@ def run(
             slippage_bps=slippage_bps,
             position_size=position_size,
             base_equity=base_equity,
+            signal_timeframe=signal_tf,
+            trend_timeframe=trend_tf,
         )
         log.info(
             "Starting backtest",
@@ -180,27 +186,14 @@ def load_configs(paths: ConfigPaths) -> tuple[dict[str, Any], dict[str, Any], di
         env_cfg,
         ["data_paths", "taker_fee_pct"],
     )
-    _validate_required(
-        env_cfg.get("data_paths", {}),
-        ["ohlcv_1m", "ohlcv_15m"],
-    )
-    _validate_required(
-        strat_cfg,
-        [
-            "vwap_deviation_pct_long",
-            "vwap_deviation_pct_short",
-            "rsi_long_max",
-            "rsi_short_min",
-            "tp_pct",
-            "sl_pct",
-            "timeout_minutes",
-            "regime",
-        ],
-    )
-    _validate_required(
-        strat_cfg.get("regime", {}),
-        ["adx_max", "bb_width_pct_max", "ema_flatness_threshold", "ema_spread_pct_max"],
-    )
+    candle_cfg = strat_cfg.get("candle_intervals", {}) or {}
+    signal_tf = str(candle_cfg.get("signal", "1m"))
+    trend_raw = candle_cfg.get("trend")
+    trend_tf = str(trend_raw) if trend_raw not in (None, "") else None
+    required_paths = [f"ohlcv_{signal_tf}"]
+    if trend_tf:
+        required_paths.append(f"ohlcv_{trend_tf}")
+    _validate_required(env_cfg.get("data_paths", {}), required_paths)
     _validate_required(
         risk_cfg,
         [
@@ -217,27 +210,29 @@ def load_configs(paths: ConfigPaths) -> tuple[dict[str, Any], dict[str, Any], di
 
 
 def _build_regime_params(cfg: Mapping[str, Any]) -> RegimeParams:
-    regime = cfg.get("regime", {}) or {}
+    regime_cfg = cfg.get("regime", cfg)
     return RegimeParams(
-        adx_max=regime["adx_max"],
-        bb_width_pct_max=regime["bb_width_pct_max"],
-        ema_flatness_threshold=regime["ema_flatness_threshold"],
-        ema_spread_pct_max=regime["ema_spread_pct_max"],
-        vwap_reversion_check=regime.get("vwap_reversion_check", True),
-        vwap_deviation_pct_max=regime.get("vwap_deviation_pct_max"),
+        adx_min=float(regime_cfg.get("adx_min", 18.0)),
+        ema_gap_pct_min=float(regime_cfg.get("ema_gap_pct_min", 0.001)),
+        require_trend=bool(regime_cfg.get("require_trend", True)),
     )
 
 
 def _build_entry_params(cfg: Mapping[str, Any]) -> EntryParams:
+    entry_cfg = cfg.get("entry", cfg)
     return EntryParams(
-        vwap_deviation_pct_long=cfg["vwap_deviation_pct_long"],
-        vwap_deviation_pct_short=cfg["vwap_deviation_pct_short"],
-        rsi_long_max=cfg["rsi_long_max"],
-        rsi_short_min=cfg["rsi_short_min"],
-        tp_pct=cfg["tp_pct"],
-        sl_pct=cfg["sl_pct"],
-        timeout_minutes=cfg["timeout_minutes"],
-        pin_bar_ratio=cfg.get("pin_bar_ratio", 2.0),
+        mode=str(entry_cfg.get("mode", "reversion")),
+        bb_touch_buffer_pct=float(entry_cfg.get("bb_touch_buffer_pct", 0.001)),
+        rsi_long_max=float(entry_cfg.get("rsi_long_max", 38.0)),
+        rsi_short_min=float(entry_cfg.get("rsi_short_min", 62.0)),
+        htf_vwap_pullback_pct=float(entry_cfg.get("htf_vwap_pullback_pct", 0.002)),
+        ema200_guard_pct=float(entry_cfg.get("ema200_guard_pct", 0.001)),
+        atr_sl_mult=float(entry_cfg.get("atr_sl_mult", 1.6)),
+        min_stop_pct=float(entry_cfg.get("min_stop_pct", 0.0012)),
+        rr_ratio=float(entry_cfg.get("rr_ratio", 1.8)),
+        timeout_minutes=int(entry_cfg.get("timeout_minutes", 90)),
+        session_start_hour_utc=entry_cfg.get("session_start_hour_utc"),
+        session_end_hour_utc=entry_cfg.get("session_end_hour_utc"),
     )
 
 
@@ -253,12 +248,12 @@ def _build_risk_params(cfg: Mapping[str, Any]) -> RiskParams:
 
 def _build_data_provider(env_cfg: Mapping[str, Any]) -> DataProvider:
     data_paths = env_cfg.get("data_paths") or {}
-    return DataProvider(
-        timeframe_paths={
-            "1m": str(data_paths["ohlcv_1m"]),
-            "15m": str(data_paths["ohlcv_15m"]),
-        }
-    )
+    timeframes: dict[str, str] = {}
+    for key, value in data_paths.items():
+        if key.startswith("ohlcv_"):
+            tf = key.replace("ohlcv_", "")
+            timeframes[tf] = str(value)
+    return DataProvider(timeframe_paths=timeframes)
 def _build_notifier(
     env_cfg: Mapping[str, Any],
     *,

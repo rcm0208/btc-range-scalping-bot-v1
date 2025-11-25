@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal, Mapping, NotRequired, Optional, TypedDict
 
-Timeframe = Literal["1m", "15m"]
+Timeframe = Literal["1m", "15m", "1h", "4h"]
 Side = Literal["long", "short"]
 SignalType = Literal["enter", "exit", "hold", "skip"]
 
@@ -30,10 +30,16 @@ class Indicators(TypedDict):
     bb_middle: Optional[float]
     bb_lower: Optional[float]
     rsi: Optional[float]
+    stoch_rsi_k: Optional[float]
+    stoch_rsi_d: Optional[float]
     adx: Optional[float]
     ema50: Optional[float]
     ema200: Optional[float]
     atr: Optional[float]
+    ha_open: Optional[float]
+    ha_close: Optional[float]
+    ha_high: Optional[float]
+    ha_low: Optional[float]
 
 
 class Signal(TypedDict):
@@ -45,6 +51,8 @@ class Signal(TypedDict):
     tp_level: Optional[float]
     sl_level: Optional[float]
     timeout_ms: Optional[int]
+    tp1_level: Optional[float]
+    trailing_start: Optional[float]
     context: Optional[Mapping[str, Any]]
 
 
@@ -70,9 +78,13 @@ class OpenPosition(TypedDict):
     side: Side
     entry_price: float
     entry_time_ms: int
-    tp_level: float
+    tp_level: float  # 主TP (TP2)
+    tp1_level: Optional[float]  # 部分利確用TP1
     sl_level: float
     timeout_ms: int
+    filled_tp1: bool
+    trailing_active: bool
+    trailing_start: Optional[float]
 
 
 __all__ = [

@@ -72,6 +72,10 @@ class _TimeframeState:
     vwap_num: float = 0.0
     vwap_den: float = 0.0
     bb_closes: Deque[float] = field(default_factory=deque)
+    rsi_values: Deque[float] = field(default_factory=lambda: deque(maxlen=50))
+    stoch_k_values: Deque[float] = field(default_factory=lambda: deque(maxlen=10))
+    ha_open: Optional[float] = None
+    ha_close: Optional[float] = None
     rsi: _RsiState = field(default_factory=_RsiState)
     adx: _AdxState = field(default_factory=_AdxState)
     atr: _AtrState = field(default_factory=_AtrState)
@@ -87,22 +91,28 @@ class IndicatorEngine:
         self,
         bb_period: int = 20,
         bb_std: float = 2.0,
-        rsi_period: int = 7,
+        stoch_rsi_period: int = 14,
+        stoch_rsi_smooth_k: int = 3,
+        stoch_rsi_smooth_d: int = 3,
+        rsi_period: int = 14,
         adx_period: int = 14,
-        ema_fast_period: int = 50,
+        ema_fast_period: int = 20,
         ema_slow_period: int = 200,
         atr_period: int = 20,
         supported_timeframes: set[Timeframe] | None = None,
     ) -> None:
         self.bb_period = bb_period
         self.bb_std = bb_std
+        self.stoch_rsi_period = stoch_rsi_period
+        self.stoch_rsi_smooth_k = stoch_rsi_smooth_k
+        self.stoch_rsi_smooth_d = stoch_rsi_smooth_d
         self.rsi_period = rsi_period
         self.adx_period = adx_period
         self.ema_fast_period = ema_fast_period
         self.ema_slow_period = ema_slow_period
         self.atr_period = atr_period
         self._states: Dict[Timeframe, _TimeframeState] = {}
-        self._supported_timeframes: set[Timeframe] = supported_timeframes or {"1m", "15m"}
+        self._supported_timeframes: set[Timeframe] = supported_timeframes or {"1m", "15m", "1h", "4h"}
 
     def update(self, timeframe: Timeframe, bar: Bar) -> Indicators:
         state = self._get_state(timeframe)
@@ -110,14 +120,17 @@ class IndicatorEngine:
         high = float(bar["high"])
         low = float(bar["low"])
         volume = float(bar["volume"])
+        open_ = float(bar["open"])
 
         if _has_invalid_values(close, high, low, volume):
             # Skip update to avoid poisoning cumulative state
             return state.latest
 
+        ha_open, ha_close, ha_high, ha_low = self._update_heikin_ashi(state, open_, high, low, close)
         vwap = self._update_vwap(state, high, low, close, volume)
         bb_upper, bb_middle, bb_lower = self._update_bollinger(state, close)
         rsi = self._update_rsi(state, close)
+        stoch_k, stoch_d = self._update_stoch_rsi(state, rsi)
         adx = self._update_adx(state, high, low, close)
         ema50 = self._update_ema(state, close, is_fast=True)
         ema200 = self._update_ema(state, close, is_fast=False)
@@ -129,10 +142,16 @@ class IndicatorEngine:
             "bb_middle": bb_middle,
             "bb_lower": bb_lower,
             "rsi": rsi,
+            "stoch_rsi_k": stoch_k,
+            "stoch_rsi_d": stoch_d,
             "adx": adx,
             "ema50": ema50,
             "ema200": ema200,
             "atr": atr,
+            "ha_open": ha_open,
+            "ha_close": ha_close,
+            "ha_high": ha_high,
+            "ha_low": ha_low,
         }
         state.latest = indicators
         return indicators
@@ -150,7 +169,9 @@ class IndicatorEngine:
             raise UnsupportedTimeframeError(timeframe)
         if timeframe not in self._states:
             self._states[timeframe] = _TimeframeState(
-                bb_closes=deque(maxlen=self.bb_period)
+                bb_closes=deque(maxlen=self.bb_period),
+                rsi_values=deque(maxlen=max(self.bb_period, self.stoch_rsi_period * 3)),
+                stoch_k_values=deque(maxlen=max(5, self.stoch_rsi_smooth_k * 2)),
             )
         return self._states[timeframe]
 
@@ -230,7 +251,9 @@ class IndicatorEngine:
                 return 50.0
             return 100.0
         rs = rsi_state.avg_gain / rsi_state.avg_loss
-        return 100 - (100 / (1 + rs))
+        rsi_val = 100 - (100 / (1 + rs))
+        state.rsi_values.append(rsi_val)
+        return rsi_val
 
     def _true_range(
         self,
@@ -366,3 +389,36 @@ class IndicatorEngine:
             (atr_state.atr * (self.atr_period - 1)) + tr
         ) / self.atr_period
         return atr_state.atr
+
+    def _update_heikin_ashi(
+        self, state: _TimeframeState, open_: float, high: float, low: float, close: float
+    ) -> tuple[float, float, float, float]:
+        ha_close = (open_ + high + low + close) / 4
+        if state.ha_open is None or state.ha_close is None:
+            ha_open = (open_ + close) / 2
+        else:
+            ha_open = (state.ha_open + state.ha_close) / 2
+        ha_high = max(high, ha_open, ha_close)
+        ha_low = min(low, ha_open, ha_close)
+        state.ha_open = ha_open
+        state.ha_close = ha_close
+        return ha_open, ha_close, ha_high, ha_low
+
+    def _update_stoch_rsi(
+        self, state: _TimeframeState, rsi: Optional[float]
+    ) -> tuple[Optional[float], Optional[float]]:
+        if rsi is None:
+            return None, None
+        state.rsi_values.append(rsi)
+        if len(state.rsi_values) < self.stoch_rsi_period:
+            return None, None
+        window = list(state.rsi_values)[-self.stoch_rsi_period :]
+        rsi_min = min(window)
+        rsi_max = max(window)
+        stoch = 0.0 if rsi_max == rsi_min else (rsi - rsi_min) / (rsi_max - rsi_min) * 100
+        state.stoch_k_values.append(stoch)
+        k_vals = list(state.stoch_k_values)[-self.stoch_rsi_smooth_k :]
+        d_vals = list(state.stoch_k_values)[-self.stoch_rsi_smooth_d :]
+        k = sum(k_vals) / len(k_vals) if k_vals else None
+        d = sum(d_vals) / len(d_vals) if d_vals else None
+        return k, d

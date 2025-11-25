@@ -20,4 +20,6 @@ data/
 *.parquet
 !tests/fixtures/*.parquet
 
+# Tooling artifacts
 .serena
+backtests/

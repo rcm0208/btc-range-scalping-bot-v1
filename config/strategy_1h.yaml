@@ -1,22 +1,22 @@
 symbol: "BTCUSDT"
 candle_intervals:
   trend: null
-  signal: "4h"
-# 4h BB 押し目・戻り目（同一足でトレンド判定）
+  signal: "1h"
+# 1h BB リバーション（ADX/EMAバイアス必須）
 regime:
-  adx_min: 10
+  adx_min: 14
   ema_gap_pct_min: 0.0005
   require_trend: true
 entry:
   mode: "reversion"
   bb_touch_buffer_pct: 0.001
-  rsi_long_max: 30
-  rsi_short_min: 64
+  rsi_long_max: 25
+  rsi_short_min: 75
   htf_vwap_pullback_pct: 0.0
   ema200_guard_pct: 0.0005
-  atr_sl_mult: 1.8
+  atr_sl_mult: 1.2
   min_stop_pct: 0.001
-  rr_ratio: 1.8
-  timeout_minutes: 720
+  rr_ratio: 1.1
+  timeout_minutes: 240
   session_start_hour_utc: null
   session_end_hour_utc: null

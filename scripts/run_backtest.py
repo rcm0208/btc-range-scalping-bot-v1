@@ -37,6 +37,12 @@ def parse_dt(value: str) -> datetime:
     return dt
 
 
+def _validate_required(cfg: Dict[str, Any], required_keys: list[str]) -> None:
+    missing = [k for k in required_keys if k not in cfg or cfg[k] in (None, "")]
+    if missing:
+        raise ValueError(f"Missing required config keys: {missing}")
+
+
 def run_backtest_from_configs(
     *,
     env_path: Path,
@@ -53,37 +59,49 @@ def run_backtest_from_configs(
     risk_cfg = load_yaml(risk_path)
 
     _validate_required(env_cfg, ["data_paths", "taker_fee_pct"])
-    _validate_required(env_cfg.get("data_paths", {}), ["ohlcv_1m", "ohlcv_15m"])
-    _validate_required(strat_cfg, ["vwap_deviation_pct_long", "vwap_deviation_pct_short", "rsi_long_max", "rsi_short_min", "tp_pct", "sl_pct", "timeout_minutes", "regime"])
     _validate_required(risk_cfg, ["max_open_positions", "cooldown_minutes", "max_consecutive_losses", "use_daily_loss_limit", "daily_loss_limit_pct"])
-    _validate_required(strat_cfg.get("regime", {}), ["adx_max", "bb_width_pct_max", "ema_flatness_threshold", "ema_spread_pct_max"])
+
+    candle_cfg = strat_cfg.get("candle_intervals", {}) or {}
+    signal_tf = str(candle_cfg.get("signal", "1m"))
+    trend_raw = candle_cfg.get("trend")
+    trend_tf = str(trend_raw) if trend_raw not in (None, "") else None
 
     data_paths = env_cfg.get("data_paths") or {}
-    provider = DataProvider(
-        timeframe_paths={
-            "1m": str(data_paths.get("ohlcv_1m", "")),
-            "15m": str(data_paths.get("ohlcv_15m", "")),
-        }
-    )
 
-    regime = strat_cfg.get("regime", {})
+    def _resolve_path(tf: str) -> str:
+        key = f"ohlcv_{tf}"
+        value = data_paths.get(key)
+        if not value:
+            raise ValueError(f"data_paths.{key} is required for timeframe {tf}")
+        return str(value)
+
+    timeframe_paths: Dict[str, str] = {signal_tf: _resolve_path(signal_tf)}
+    if trend_tf:
+        timeframe_paths.setdefault(trend_tf, _resolve_path(trend_tf))
+
+    provider = DataProvider(timeframe_paths=timeframe_paths)
+
+    regime_cfg = strat_cfg.get("regime", strat_cfg)
+    entry_cfg = strat_cfg.get("entry", strat_cfg)
+
     regime_params = RegimeParams(
-        adx_max=regime["adx_max"],
-        bb_width_pct_max=regime["bb_width_pct_max"],
-        ema_flatness_threshold=regime["ema_flatness_threshold"],
-        ema_spread_pct_max=regime["ema_spread_pct_max"],
-        vwap_reversion_check=regime.get("vwap_reversion_check", True),
-        vwap_deviation_pct_max=regime.get("vwap_deviation_pct_max"),
+        adx_min=float(regime_cfg.get("adx_min", 18.0)),
+        ema_gap_pct_min=float(regime_cfg.get("ema_gap_pct_min", 0.001)),
+        require_trend=bool(regime_cfg.get("require_trend", True)),
     )
     entry_params = EntryParams(
-        vwap_deviation_pct_long=strat_cfg["vwap_deviation_pct_long"],
-        vwap_deviation_pct_short=strat_cfg["vwap_deviation_pct_short"],
-        rsi_long_max=strat_cfg["rsi_long_max"],
-        rsi_short_min=strat_cfg["rsi_short_min"],
-        tp_pct=strat_cfg["tp_pct"],
-        sl_pct=strat_cfg["sl_pct"],
-        timeout_minutes=strat_cfg["timeout_minutes"],
-        pin_bar_ratio=strat_cfg.get("pin_bar_ratio", 2.0),
+        mode=str(entry_cfg.get("mode", "reversion")),
+        bb_touch_buffer_pct=float(entry_cfg.get("bb_touch_buffer_pct", 0.001)),
+        rsi_long_max=float(entry_cfg.get("rsi_long_max", 38.0)),
+        rsi_short_min=float(entry_cfg.get("rsi_short_min", 62.0)),
+        htf_vwap_pullback_pct=float(entry_cfg.get("htf_vwap_pullback_pct", 0.002)),
+        ema200_guard_pct=float(entry_cfg.get("ema200_guard_pct", 0.001)),
+        atr_sl_mult=float(entry_cfg.get("atr_sl_mult", 1.6)),
+        min_stop_pct=float(entry_cfg.get("min_stop_pct", 0.0012)),
+        rr_ratio=float(entry_cfg.get("rr_ratio", 1.8)),
+        timeout_minutes=int(entry_cfg.get("timeout_minutes", 90)),
+        session_start_hour_utc=entry_cfg.get("session_start_hour_utc"),
+        session_end_hour_utc=entry_cfg.get("session_end_hour_utc"),
     )
     strategy = StrategyCore(regime_params=regime_params, entry_params=entry_params)
 
@@ -109,6 +127,8 @@ def run_backtest_from_configs(
         slippage_bps=slippage_bps,
         position_size=position_size,
         base_equity=base_equity,
+        signal_timeframe=signal_tf,
+        trend_timeframe=trend_tf,
     )
     result = backtester.run(start=start, end=end)
 
@@ -154,9 +174,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
-def _validate_required(cfg: Dict[str, Any], required_keys: list[str]) -> None:
-    missing = [k for k in required_keys if k not in cfg or cfg[k] in (None, "")]
-    if missing:
-        raise ValueError(f"Missing required config keys: {missing}")

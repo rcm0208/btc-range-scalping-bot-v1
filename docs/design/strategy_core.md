@@ -32,16 +32,17 @@ Signal = {
 - EMA平行性・乖離の指標（案）:
   - 傾き: 直近N本のEMA差分の絶対値が threshold 以下
   - 乖離: |EMA50 - EMA200| / price < ema_spread_pct_max (初期案: 0.1%〜0.2%をBTで調整)
+- BT用スイッチ: `skip_regime` を True にすると常時 Range ON（レジーム判定をバイパス）。
 
-## エントリー判定（Range ON時の1m足）
-- 共通前提: risk_manager の判定を通過し、同時ポジション=1前提。
-- ロング条件:
-  - 位置: 1m終値がBB下限タッチ/下抜け
-  - VWAP乖離: price <= vwap * (1 - vwap_dev_long)（初期0.6%）
-  - RSI(7) < rsi_long_max（初期25）
-  - ローソク反転: ピンバー/包み足（バンド外→内で終値陽線）
-- ショート条件: 上下反転（VWAP乖離 +0.6%、RSI>75、BB上限タッチ/上抜け、陰線戻り）
-- Signal生成: enter {side, tp_level, sl_level, timeout_ms, reason}
+## エントリー判定（トレンドフォロー・プルバック型）
+- 15mのトレンド方向（EMA50/200＋ADX）を確認し、ON方向のみエントリー。
+- 1m側:
+  - EMA50へのプルバック許容 (`ema_pullback_pct_max`)
+  - RSI: ロングなら RSI ≥ rsi_long_min、ショートなら RSI ≤ rsi_short_max
+  - ブレイク確認: 直近高値/安値更新でトリガー（`breakout_confirm`）
+  - ATRレンジ: `atr_min_pct`〜`atr_max_pct`
+  - 時間帯: `session_start_hour_utc`〜`session_end_hour_utc`
+- 決済: TP1 で部分利確（例 0.35%）、TP2 で残り（例 0.8%）、SL（例 -0.6%）、timeout短め（例 6分）、オプションでトレーリングSL（TP1後に建値+αへ引き上げ）。
 
 ## 決済ロジック
 - TP: VWAP付近またはBBミドル付近。値幅目安: +0.30%
@@ -57,11 +58,17 @@ Signal = {
 ## パラメータ（初期案: basic_design に準拠）
 - vwap_deviation_pct_long = 0.006, short = 0.006
 - rsi_long_max = 25, rsi_short_min = 75
-- tp_pct = 0.003, sl_pct = -0.0022
-- timeout_minutes = 12
-- adx_max = 20, bb_width_pct_max = 0.005
+- tp1_pct / tp2_pct（部分利確を想定）, sl_pct
+- timeout_minutes
+- ema_pullback_pct_max: プルバック許容
+- breakout_confirm: 直近高安ブレイク確認
+- atr_min_pct / atr_max_pct: ATR/price の許容レンジ
+- session_start_hour_utc / session_end_hour_utc: 取引許可時間帯（UTC）
+- trendフィルタ: use_trend_filter, trend_adx_min, trend_ema_gap_pct_min
+- use_trailing / trailing_pct: TP1後の建値+αトレーリング
 - ema_spread_pct_max = 0.001〜0.002（要BT調整）
 - atr_spike_multiplier = 2.5（フィルタ用途）
+- skip_regime (default False) レジーム判定をバイパスするBT用フラグ
 
 ## ログ/デバッグ
 - 出力: reason, 条件判定の各閾値、使用した指標値（vwap, bb上下, rsi, adx, ema差, vwap乖離など）。
