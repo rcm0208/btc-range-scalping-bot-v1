@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Iterator, Optional, cast
+from typing import Iterator, Optional, Sequence, cast
 
 import pytest
 
@@ -26,8 +26,8 @@ def _make_bar(i: int, *, close: float) -> Bar:
 
 
 class StubDataProvider:
-    def __init__(self, bars_1m: list[Bar]) -> None:
-        self.bars_1m = bars_1m
+    def __init__(self, bars_1m: Sequence[Bar]) -> None:
+        self.bars_1m = list(bars_1m)
 
     def load_ohlcv(self, timeframe: str, start: datetime, end: datetime) -> Iterator[Bar]:
         _ = start, end

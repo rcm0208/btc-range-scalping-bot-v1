@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 try:
-    import yaml
+    import yaml  # type: ignore[import-not-found]
 except ImportError:  # pragma: no cover - optional dependency handled at runtime
     yaml = None  # type: ignore[assignment]
 

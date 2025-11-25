@@ -112,12 +112,13 @@ class Backtester:
         last_reset_date = None
 
         for bar in bars_1m:
-            bar_dt = _ms_to_datetime(bar["end_ms"])
-            bar_date = bar_dt.date()
+            bar_start_dt = _ms_to_datetime(bar["start_ms"])
+            bar_end_dt = _ms_to_datetime(bar["end_ms"])
+            bar_date = bar_start_dt.date()
             if last_reset_date is None:
                 last_reset_date = bar_date
             elif bar_date != last_reset_date:
-                self.risk_manager.reset_daily(bar_dt)
+                self.risk_manager.reset_daily(bar_start_dt)
                 last_reset_date = bar_date
 
             bar_15m, indicators_15m, idx_15m = self._advance_15m(
@@ -137,10 +138,10 @@ class Backtester:
                 trade = self._close_position(bar, signal, open_position)
                 trades.append(trade)
                 equity = trade.equity_after
-                self.risk_manager.on_close(bar_dt, trade.net_return_pct, trade.net_return_pct > 0)
+                self.risk_manager.on_close(bar_end_dt, trade.net_return_pct, trade.net_return_pct > 0)
                 open_position = None
             elif signal["type"] == "enter" and open_position is None:
-                check = self.risk_manager.can_enter(bar_dt, self._current_pnl_stats())
+                check = self.risk_manager.can_enter(bar_start_dt, self._current_pnl_stats())
                 if check["allowed"]:
                     open_position = self._open_position(bar, signal, equity)
                     self.risk_manager.on_enter()

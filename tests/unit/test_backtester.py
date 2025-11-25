@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Sequence
 
 import pytest
 
@@ -28,9 +28,9 @@ def _make_bar(i: int, *, close: float = 100.0, timeframe: Timeframe = "1m") -> B
 
 
 class StubDataProvider:
-    def __init__(self, bars_1m: list[Bar], bars_15m: list[Bar]) -> None:
-        self.bars_1m = bars_1m
-        self.bars_15m = bars_15m
+    def __init__(self, bars_1m: Sequence[Bar], bars_15m: Sequence[Bar]) -> None:
+        self.bars_1m = list(bars_1m)
+        self.bars_15m = list(bars_15m)
 
     def load_ohlcv(self, timeframe: str, start: datetime, end: datetime) -> Iterator[Bar]:
         _ = start, end  # unused in stub
@@ -271,7 +271,7 @@ def test_backtester_fees_use_exit_notional() -> None:
 
 def test_backtester_clamps_tp_to_target_on_overshoot() -> None:
     # High goes far beyond TP, fill should clamp at TP (no slippage/fees here)
-    bars_1m = [
+    bars_1m: list[Bar] = [
         _make_bar(0, close=100.0, timeframe="1m"),
         {
             **_make_bar(1, close=100.0, timeframe="1m"),
@@ -687,6 +687,117 @@ def test_backtester_blocks_after_losing_streak_limit() -> None:
     assert risk.state.stopped_reason == "losing_streak"
     assert risk.state.losing_streak == 1
     assert strategy.enter_count >= 1
+
+
+def test_backtester_resets_daily_on_bar_start_date() -> None:
+    # bar0 ends at 00:00 next day, reset should occur on next bar (start date of bar1)
+    bar0_start = (23 * 60 + 59) * 60_000
+    bar0_end = 24 * 60 * 60_000  # 00:00 next day
+    bar1_start = bar0_end
+    bar1_end = bar1_start + 60_000
+    bars_1m: list[Bar] = [
+        {
+            "open": 100.0,
+            "high": 100.0,
+            "low": 100.0,
+            "close": 100.0,
+            "volume": 1.0,
+            "start_ms": bar0_start,
+            "end_ms": bar0_end,
+            "symbol": "BTC",
+            "timeframe": "1m",
+        },
+        {
+            "open": 100.0,
+            "high": 100.0,
+            "low": 100.0,
+            "close": 100.0,
+            "volume": 1.0,
+            "start_ms": bar1_start,
+            "end_ms": bar1_end,
+            "symbol": "BTC",
+            "timeframe": "1m",
+        },
+    ]
+    provider = StubDataProvider(bars_1m, [])
+
+    class ResetTrackingRisk(RiskManager):
+        def __init__(self, params: RiskParams) -> None:
+            super().__init__(params)
+            self.reset_calls: list[int] = []
+
+        def reset_daily(self, now: datetime) -> None:
+            self.reset_calls.append(int(now.timestamp() * 1000))
+            super().reset_daily(now)
+
+    class OneEnterStrategy:
+        entered = False
+
+        def update(
+            self,
+            bar_1m: Bar,
+            indicators_1m: Indicators,
+            bar_15m: Optional[Bar] = None,
+            indicators_15m: Optional[Indicators] = None,
+            open_position: Optional[OpenPosition] = None,
+        ) -> Signal:
+            _ = indicators_1m, bar_15m, indicators_15m
+            if open_position:
+                return {
+                    "type": "exit",
+                    "side": "long",
+                    "reason": "take_profit",
+                    "tp_level": 200.0,
+                    "sl_level": 50.0,
+                    "timeout_ms": 60_000,
+                    "context": {"price": float(bar_1m["close"])},
+                }
+            if not self.entered:
+                self.entered = True
+                return {
+                    "type": "enter",
+                    "side": "long",
+                    "reason": "enter_long",
+                    "tp_level": 200.0,
+                    "sl_level": 50.0,
+                    "timeout_ms": 60_000,
+                    "context": None,
+                }
+            return {
+                "type": "hold",
+                "side": None,
+                "reason": "noop",
+                "tp_level": None,
+                "sl_level": None,
+                "timeout_ms": None,
+                "context": None,
+            }
+
+    strategy = OneEnterStrategy()
+    risk = ResetTrackingRisk(
+        RiskParams(
+            max_open_positions=1,
+            cooldown_minutes=0,
+            max_consecutive_losses=3,
+            use_daily_loss_limit=False,
+            daily_loss_limit_pct=-0.02,
+        )
+    )
+    backtester = Backtester(
+        data_provider=provider,
+        indicator_engine=IndicatorEngine(),
+        strategy=strategy,  # type: ignore[arg-type]
+        risk_manager=risk,
+        fee_rate=0.0,
+        slippage_bps=0.0,
+    )
+
+    start = datetime.fromtimestamp(0, tz=timezone.utc)
+    end = start + timedelta(minutes=2)
+    backtester.run(start, end)
+
+    assert len(risk.reset_calls) == 1
+    assert risk.reset_calls[0] == bar1_start
 
 
 class RecordingStrategy:
