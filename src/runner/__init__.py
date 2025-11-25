@@ -289,10 +289,19 @@ def _is_emergency_stop(flags: RunFlags) -> bool:
 
 def _load_yaml_or_json(path: Path) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8")
-    if yaml is None:
+    if path.suffix.lower() == ".json":
         return json.loads(text)
+    if yaml is None:
+        raise ImportError(
+            "PyYAML is required to load YAML config files. "
+            "Install it (see requirements.txt) or use JSON configs."
+        )
     data = yaml.safe_load(text)
-    return data or {}
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError(f"Unexpected config format in {path}")
+    return data
 
 
 def _validate_required(cfg: Mapping[str, Any], required_keys: list[str]) -> None:
